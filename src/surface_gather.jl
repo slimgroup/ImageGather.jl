@@ -27,14 +27,14 @@ end
 
 Compute the single shot contribution to the surface offset gather via double rtm. This single source contribution consists of the following steps:
 
-- 1. Mute direct arrival in the data.
-- 2. Compute standard RTM ``R``.
-- 3. Compute the offset RTM ``R_o`` for the the weighted data where each trace is weighted by its offset `(rec_x - src_x)`.
-- 4. Compute the envelope ``R_e = \\mathcal{E}(R)`` and ``R_{oe} = \\mathcal{E}(R_o)``.
-- 5. Compute the offset map ``\\frac{R_e \\odot R_{oe}}{R_e \\odot R_e + \\epsilon}``.
-- 6. Apply illumination correction and laplace filter ``R_l = \\mathcal{D} \\Delta R``.
-- 7. Compute each offset contribution ``\\mathcal{I}[:, h] = R_l \\odot \\delta[ha - h]_{tol}`` [`delta_h`](@ref).
-- 8. Return ``\\mathcal{I}``.
+1. Mute direct arrival in the data.
+2. Compute standard RTM ``R``.
+3. Compute the offset RTM ``R_o`` for the the weighted data where each trace is weighted by its offset `(rec_x - src_x)`.
+4. Compute the envelope ``R_e = \\mathcal{E}(R)`` and ``R_{oe} = \\mathcal{E}(R_o)``.
+5. Compute the offset map ``\\frac{R_e \\odot R_{oe}}{R_e \\odot R_e + \\epsilon}``.
+6. Apply illumination correction and laplace filter ``R_l = \\mathcal{D} \\Delta R``.
+7. Compute each offset contribution ``\\mathcal{I}[:, h] = R_l \\odot \\delta[ha - h]_{tol}`` [`delta_h`](@ref).
+8. Return ``\\mathcal{I}``.
 
 """
 function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, options)

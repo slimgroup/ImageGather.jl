@@ -5,4 +5,5 @@ makedocs(sitename="Image gather tools",
          authors="Mathias Louboutin",
          pages = Any["Home" => "index.md"])
 
-deploydocs(repo="github.com/slimgroup/ImageGather.jl")  
+deploydocs(repo="github.com/slimgroup/ImageGather.jl",
+           devbranch="main")
