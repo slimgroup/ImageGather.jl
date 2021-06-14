@@ -1,4 +1,4 @@
-# SLimOptim.jl documentation
+# ImageGather.jl documentation
 
 ```@contents
 ```
