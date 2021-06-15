@@ -1,9 +1,18 @@
 name = "ImageGather"
 uuid = "355d8124-6b2e-49b5-aab5-cdbc0a5fccbe"
 authors = ["mloubout <mathias.louboutin@gmail.com>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 DSP = "717857b8-e6f2-59f4-9121-6e50c889abd2"
 JUDI = "f3b833dc-6b2e-5b9c-b940-873ed6319979"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+
+[compat]
+JUDI = "2.4.0"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
