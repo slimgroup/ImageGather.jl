@@ -1,5 +1,5 @@
 import JUDI: judipmap
-export surface_gather
+export surface_gather, offset_map
 
 
 """
@@ -79,10 +79,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     illum = remove_padding(illum, modelPy.padsizes)
 
     # offset map
-    rtmn = mv_avg_2d(envelope(rtm))
-    rtmo = mv_avg_2d(envelope(rtmo))
-
-    offset_map = rtmn .* rtmo ./ (rtmn .* rtmn .+ eps(Float32)) .- scale
+    offset_map = offset_map(rtm, rtmo; scale=scale)
 
     rtm = laplacian(rtm)
     rtm[illum .> 0] ./= illum[illum .> 0]
@@ -94,4 +91,18 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     end
     GC.gc()
     return soffs
+end
+
+"""
+    offset_map(rtm, rtmo; scale=0)
+
+Return the regularized least-square division of rtm and rtmo. The regularization consists of the envelope and moving average
+followed by the least-square division ['surface_gather'](@ref)
+"""
+function offset_map(rtm::AbstractArray{T, 2}, rtmo::AbstractArray{T, 2}; scale=0) where T
+    rtmn = mv_avg_2d(envelope(rtm))
+    rtmo = mv_avg_2d(envelope(rtmo))
+
+    offset_map = rtmn .* rtmo ./ (rtmn .* rtmn .+ eps(Float32)) .- scale
+    return offset_map
 end
