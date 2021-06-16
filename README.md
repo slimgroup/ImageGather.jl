@@ -1,5 +1,6 @@
 
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://slimgroup.github.io/ImageGather.jl/dev) 
+[![DOI](https://zenodo.org/badge/376881077.svg)](https://zenodo.org/badge/latestdoi/376881077)
 
 # ImageGather.jl
 
