@@ -1,4 +1,4 @@
-export mv_avg_2d, delta_h, envelope, mute, mute!, laplacian
+export mv_avg_2d, delta_h, envelope, mute, mute!, laplacian, offset_map
 
 """
     mv_avg_2d(x; k=5)

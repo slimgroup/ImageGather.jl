@@ -79,7 +79,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     illum = remove_padding(illum, modelPy.padsizes)
 
     # offset map
-    offset_map = offset_map(rtm, rtmo; scale=scale)
+    h_map = offset_map(rtm, rtmo; scale=scale)
 
     rtm = laplacian(rtm)
     rtm[illum .> 0] ./= illum[illum .> 0]
@@ -87,7 +87,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     soffs = zeros(Float32, model.n..., length(offs))
 
     for (i, h) in enumerate(offs)
-        soffs[:, :, i] .+= rtm .* delta_h(offset_map, h, 2*diff(offs)[1])
+        soffs[:, :, i] .+= rtm .* delta_h(h_map, h, 2*diff(offs)[1])
     end
     GC.gc()
     return soffs
