@@ -1,4 +1,4 @@
-import JUDI: judipmap
+import JUDI: task_distributed, _worker_pool
 export surface_gather, offset_map
 
 
@@ -18,8 +18,8 @@ Parameters
 function surface_gather(model::Model, q::judiVector, data::judiVector; offsets=nothing, options=Options())
     isnothing(offsets) && (offsets = 0f0:10*model.d[1]:(model.n[1]-1)*model.d[1])
     offsets = collect(offsets)
-    results = judipmap(i-> double_rtm_cig(model, subsample(q, i), subsample(data, i), offsets, subsample(options, i)), 1:q.nsrc)
-    return sum(results)
+    results = task_distributed(double_rtm_cig, _worker_pool(), model, q, data, offsets; options=options)
+    return results
 end
 
 """
@@ -72,7 +72,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     mute!(res, off_r .- scale; dt=dtComp/1f3, t0=.25)
     res_o = res .* off_r'
     # Double rtm
-    rtm, rtmo, illum = pycall(dbr."double_rtm", Tuple{Array{Float32, modelPy.dim},  Array{Float32, modelPy.dim}, Array{Float32, modelPy.dim}},
+    rtm, rtmo, illum = pycall(impl."double_rtm", Tuple{Array{Float32, modelPy.dim},  Array{Float32, modelPy.dim}, Array{Float32, modelPy.dim}},
                               modelPy, qIn, src_coords, res, res_o, rec_coords, space_order=options.space_order)
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)

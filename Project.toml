@@ -9,7 +9,7 @@ JUDI = "f3b833dc-6b2e-5b9c-b940-873ed6319979"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
-JUDI = "2.4.0"
+JUDI = "2.6.0"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
