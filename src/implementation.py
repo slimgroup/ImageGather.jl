@@ -53,13 +53,12 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
 
     # Create operator and run
     subs = model.spacing_map
-    from IPython import embed; embed()
     op = Operator(pde + geom_expr + g_expr,subs=subs, name="cig_sso", opt=opt_op(model))
     try:
         op.cfunction
     except:
         op = Operator(pde + geom_expr + g_expr,subs=subs, name="cig_sso", opt='advanced')
         op.cfunction
-    
+    op()
     # Output
     return gradm.data

@@ -6,7 +6,7 @@ using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather
 import ImageGather: cig_sso
 # Set up model structure
 n = (601, 333)   # (x,y,z) or (x,z)
-d = (15., 15.)
+d = (30., 30.)
 o = (0., 0.)
 
 # Velocity [km/s]
