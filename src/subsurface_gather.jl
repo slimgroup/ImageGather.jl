@@ -42,38 +42,33 @@ judiJacobian(J::judiExtendedJacobian{DDT,RDT}; name=J.name, m=J.m, n=J.n, info=J
 bornop(J::judiExtendedJacobian, dm_ext) = task_distributed(extended_born, _worker_pool(), J.model, J.source, J.recGeometry, dm_ext, J.offsets; options=J.options)
 adjbornop(J::judiExtendedJacobian, w) = task_distributed(cig_sso, _worker_pool(), J.model, J.source, w, J.offsets; options=J.options)
 
-# function bornop(model::Model, q::judiVector, recGeometry::Geometry, dm_ext::Array{T, N}, offsets::Vector, options::Options)
-#     # Load full geometry for out-of-core geometry containers
-#     recGeometry = Geometry(recGeometry)
-#     srcGeometry = Geometry(q.geometry)
-#     # Avoid useless propage without perturbation
-#     if norm(dm) == 0
-#         return judiVector(recGeometry, zeros(Float32, recGeometry.nt[1], length(recGeometry.xloc[1])))
-#     end
+function bornop(model::Model, q::judiVector, recGeometry::Geometry, dm_ext::Array, offsets::Vector, options::Options)
+    # Load full geometry for out-of-core geometry containers
+    recGeometry = Geometry(recGeometry)
+    srcGeometry = Geometry(q.geometry)
 
-#     # limit model to area with sources/receivers
-#     if options.limit_m == true
-#         model = deepcopy(model_full)
-#         model, dm = limit_model_to_receiver_area(srcGeometry, recGeometry, model, options.buffer_size; pert=dm)
-#     else
-#         model = model_full
-#     end
+    # Avoid useless propage without perturbation
+    if norm(dm) == 0
+        return judiVector(recGeometry, zeros(Float32, recGeometry.nt[1], length(recGeometry.xloc[1])))
+    end
 
-#     # Set up Python model structure
-#     modelPy = devito_model(model, options; dm=dm)
+    # Set up Python model structure
+    modelPy = devito_model(model, options; dm=dm)
+    dtComp = convert(Float32, modelPy."critical_dt")
 
-#     # Remove receivers outside the modeling domain (otherwise leads to segmentation faults)
-#     recGeometry, recData = remove_out_of_bounds_receivers(recGeometry, recData, model)
+    # Extrapolate input data to computational grid
+    qIn = time_resample(q.data[1], q.geometry, dtComp)[1]
 
-#     # Devito interface
-#     argout = devito_interface(modelPy, srcGeometry, srcData, recGeometry, recData, dm, options)
-#     # Extend gradient back to original model size
-#     if op=='J' && mode==-1 && options.limit_m==true
-#         argout = extend_gradient(model_full, model, argout)
-#     end
+    # Set up coordinates
+    src_coords = setup_grid(srcGeometry, model.n)  # shifts source coordinates by origin
+    rec_coords = setup_grid(recGeometry, model.n)    # shifts rec coordinates by origin
 
-#     return argout
-# end
+    # Devito interface
+    dD = pycall(impl."cig_lin", PyArray, modelPy, src_coords, qIn, rec_coords,
+                dm_ext, offsets, isic=options.isic)
+
+    return argout
+end
 
 function cig_sso(model::Model, source::judiVector, res::judiVector, offsets::Vector, options::Options)
     @assert source.nsrc == 1 "Multiple sources are used in a single-source fwi_objective"
@@ -95,21 +90,22 @@ function cig_sso(model::Model, source::judiVector, res::judiVector, offsets::Vec
     src_coords = setup_grid(source.geometry, model.n)  # shifts source coordinates by origin
     rec_coords = setup_grid(res.geometry, model.n)    # shifts rec coordinates by origin
 
-    # Setup offsers
-    
-    g = pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved, offsets, isic=options.isic)
+    # Devito
+    g = pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved,
+               offsets, isic=options.isic)
     g = remove_padding_cig(g, modelPy.padsizes)
     return g
 end
 
 function remove_padding_cig(gradient::AbstractArray{DT}, nb::Array{Tuple{Int64,Int64},1}; true_adjoint::Bool=false) where {DT}
-    N = size(gradient)[1:end-1]
+    N = size(gradient)[2:end]
     if true_adjoint
         for (dim, (nbl, nbr)) in enumerate(nb)
-            selectdim(gradient, dim, nbl+1) .+= dropdims(sum(selectdim(gradient, dim, 1:nbl), dims=dim), dims=dim)
-            selectdim(gradient, dim, N[dim]-nbr) .+= dropdims(sum(selectdim(gradient, dim, N[dim]-nbr+1:N[dim]), dims=dim), dims=dim)
+            diml = dim+1
+            selectdim(gradient, diml, nbl+1) .+= dropdims(sum(selectdim(gradient, diml, 1:nbl), dims=diml), dims=diml)
+            selectdim(gradient, diml, N[dim]-nbr) .+= dropdims(sum(selectdim(gradient, diml, N[dim]-nbr+1:N[dim]), dims=diml), dims=diml)
         end
     end
-    out = gradient[[nbl+1:nn-nbr for ((nbl, nbr), nn) in zip(nb, N)]..., :]
+    out = gradient[:, [nbl+1:nn-nbr for ((nbl, nbr), nn) in zip(nb, N)]...]
     return out
 end
