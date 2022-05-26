@@ -48,6 +48,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
 
     # Set up Python model structure
     modelPy = devito_model(J.model, J.options)
+    dmd = reshape(dm, length(J.offsets), J.model.n...)
     dtComp = convert(Float32, modelPy."critical_dt")
 
     # Extrapolate input data to computational grid
@@ -59,7 +60,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
 
     # Devito interface
     dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dm, J.offsets, isic=J.options.isic)
+                            dmd, J.offsets, isic=J.options.isic)
     dD = time_resample(dD, dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])

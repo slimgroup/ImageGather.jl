@@ -117,9 +117,9 @@ def ext_src(model, u, dm_ext, offsets, isic=False):
     dm = Function(name="gradm", grid=model.grid, dimensions=(offs, *dims),
                   shape=(len(offsets), *N), space_order=0)
     initialize_function(dm, dm_ext,[(0, 0)] + model.padsizes)
-    from IPython import embed; embed()
+
     # extended source
     uh = u._subs(dims[0], dims[0]-oh)
     dt = u.grid.time_dim.spacing
-    ql = dt**2 /model.m * uh.dt2 * dm._subs(dims[0], dims[0]+oh)
+    ql = dt**2 /model.m * uh.dt2 * dm
     return ql
