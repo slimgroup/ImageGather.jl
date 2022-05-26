@@ -1,10 +1,11 @@
 from devito import Inc, Operator, Function, CustomDimension
+from devito.builtins import initialize_function
 
 import numpy as np
 
 from propagators import forward, gradient
 from geom_utils import src_rec
-from sensitivity import grad_expr
+from sensitivity import grad_expr, lin_src
 from wave_utils import wavefield
 from kernels import wave_kernel
 from utils import opt_op
@@ -70,54 +71,55 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
     return gradm.data
 
 
-# def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False, space_order=8):
-#     """
-#     """
-#     nt = wavelet.shape[0]
-#     # Setting wavefield
-#     u = wavefield(model, space_order, nt=nt)
-#     ul = wavefield(model, space_order, name="l")
+def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False, space_order=8):
+    """
+    """
+    nt = wavelet.shape[0]
+    # Setting wavefield
+    u = wavefield(model, space_order, nt=nt)
+    ul = wavefield(model, space_order, name="l")
 
-#     # Set up PDE expression and rearrange
-#     pde = wave_kernel(model, u)
-#     if model.dm == 0:
-#         pdel = []
-#     else:
-#         qlin = ext_src(model, u, dm_ext, offsets, isic=isic)
-#         pdel = wave_kernel(model, ul, q=qlin)
+    # Set up PDE expression and rearrange
+    pde = wave_kernel(model, u)
+    qlin = ext_src(model, u, dm_ext, offsets, isic=isic)
+    pdel = wave_kernel(model, ul) + [Inc(ul.forward, qlin)]
 
-#     # Setup source and receiver
-#     geom_expr, _, _ = src_rec(model, u, rec_coords=None,
-#                               src_coords=src_coords, wavelet=wavelet)
-#     geom_exprl, _, rcvl = src_rec(model, ul, rec_coords=rec_coords, nt=nt)
+    # Setup source and receiver
+    geom_expr, _, _ = src_rec(model, u, rec_coords=None,
+                              src_coords=src_coords, wavelet=wavelet)
+    geom_exprl, _, rcvl = src_rec(model, ul, rec_coords=rec_coords, nt=nt)
 
-#     # Create operator and run
-#     subs = model.spacing_map
-#     op = Operator(pde + geom_expr + geom_exprl + pdel,
-#                   subs=subs, name="extborn", opt=opt_op(model))
-#     op.cfunction
-#     xm, xM = (nh - 1) // 2, N[0] - (nh - 1) // 2
-#     op(x_m=xm, x_M=xM)
-#     op()
+    # Create operator and run
+    subs = model.spacing_map
+    op = Operator(pde + geom_expr + pdel + geom_exprl,
+                  subs=subs, name="extborn", opt=opt_op(model))
+    op.cfunction
 
-#     # Output
-#     return rcvl.data
+    # Remove edge for offsets
+    N = model.grid.shape
+    nh = offsets.shape[0]
+    xm, xM = (nh - 1) // 2, N[0] - (nh - 1) // 2
+    op(x_m=xm, x_M=xM)
+
+    # Output
+    return rcvl.data
 
 
-# def ext_src(model, u, dm_ext, offsets, isic=False)
-#     dims = model.grid.dimensions
-#     N = model.grid.shape
-#     nh = offsets.shape[0]
-#     offs = CustomDimension("hdim", 0, nh-1, nh)
-#     oh = Function(name="hvals", grid=model.grid, space_order=0,
-#                 dimensions=(offs,), shape=(nh,), dtype=np.int32)
-#     oh.data[:] = offsets // model.grid.spacing[0]
-#     # Extended perturbation
-#     dm = Function(name="gradm", grid=model.grid, dimensions=(offs, *dims),
-#                     shape=(len(offsets), *N), space_order=0)
-#     dm.data[:] = dm_ext
-
-#     # extended source
-#     uh = u._subs(dims[0], dims[0]+oh)
-#     ql = lin_src(model, u, isic=isic)
-#     ql = ql.subs({u: uh, dm: dm})
+def ext_src(model, u, dm_ext, offsets, isic=False):
+    dims = model.grid.dimensions
+    N = model.grid.shape
+    nh = offsets.shape[0]
+    offs = CustomDimension("hdim", 0, nh-1, nh)
+    oh = Function(name="hvals", grid=model.grid, space_order=0,
+                dimensions=(offs,), shape=(nh,), dtype=np.int32)
+    oh.data[:] = offsets // model.grid.spacing[0]
+    # Extended perturbation
+    dm = Function(name="gradm", grid=model.grid, dimensions=(offs, *dims),
+                  shape=(len(offsets), *N), space_order=0)
+    initialize_function(dm, dm_ext,[(0, 0)] + model.padsizes)
+    from IPython import embed; embed()
+    # extended source
+    uh = u._subs(dims[0], dims[0]-oh)
+    dt = u.grid.time_dim.spacing
+    ql = dt**2 /model.m * uh.dt2 * dm._subs(dims[0], dims[0]+oh)
+    return ql

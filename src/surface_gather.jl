@@ -1,6 +1,4 @@
-import JUDI: task_distributed, _worker_pool
-export surface_gather, offset_map
-
+export surface_gather
 
 """
     surface_gather(model, q, data; offsets=nothing, options=Options())
@@ -18,7 +16,11 @@ Parameters
 function surface_gather(model::Model, q::judiVector, data::judiVector; offsets=nothing, options=Options())
     isnothing(offsets) && (offsets = 0f0:10*model.d[1]:(model.n[1]-1)*model.d[1])
     offsets = collect(offsets)
-    results = task_distributed(double_rtm_cig, _worker_pool(), model, q, data, offsets; options=options)
+    pool = JUDI._worker_pool()
+    # Distribute source
+    arg_func = i -> (model, q[i], data[i], offsets, options[i])
+    # Distribute source
+    results = JUDI.run_and_reduce(double_rtm_cig, pool, q.nsrc, arg_func)
     return results
 end
 
@@ -41,7 +43,6 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     # Load full geometry for out-of-core geometry containers
     data.geometry = Geometry(data.geometry)
     q.geometry = Geometry(q.geometry)
-    ndim = length(model_full.n)
 
     # Limit model to area with sources/receivers
     if options.limit_m == true
@@ -56,9 +57,8 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     dtComp = get_dt(model; dt=options.dt_comp)
 
     # Extrapolate input data to computational grid
-    qIn = time_resample(q.data[1], q.geometry, dtComp)[1]
-    obsd = typeof(data.data[1]) == JUDI.SegyIO.SeisCon ? convert(Array{Float32,2}, data.data[1][1].data) : data.data[1]
-    res = time_resample(obsd, data.geometry, dtComp)[1]
+    qIn = time_resample(make_input(q), q.geometry, dtComp)[1]
+    res = time_resample(make_input(data), data.geometry, dtComp)[1]
 
     # Set up coordinates
     src_coords = setup_grid(q.geometry, model.n)  # shifts source coordinates by origin
@@ -72,7 +72,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     mute!(res, off_r .- scale; dt=dtComp/1f3, t0=.25)
     res_o = res .* off_r'
     # Double rtm
-    rtm, rtmo, illum = pycall(impl."double_rtm", Tuple{Array{Float32, modelPy.dim},  Array{Float32, modelPy.dim}, Array{Float32, modelPy.dim}},
+    rtm, rtmo, illum = pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
                               modelPy, qIn, src_coords, res, res_o, rec_coords, space_order=options.space_order)
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)

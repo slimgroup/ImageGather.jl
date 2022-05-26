@@ -1,6 +1,11 @@
 module ImageGather
 
-    using JUDI, DSP, PyCall
+    using JUDI
+    using JUDI.DSP, JUDI.PyCall
+
+    import Base: getindex, *
+    import JUDI: judiAbstractJacobian, judiMultiSourceVector, judiComposedPropagator, judiJacobian, make_input, propagate
+    import JUDI.LinearAlgebra: adjoint
 
     const impl = PyNULL()
 

@@ -26,7 +26,7 @@ m0_high = (1f0 ./ v0_high).^2
 dm = vec(m - m0)
 
 # Setup info and model structure
-nsrc = 51	# number of sources
+nsrc = 5	# number of sources
 model = Model(n, d, o, m; nb=40)
 model0 = Model(n, d, o, m0; nb=40)
 model0_low = Model(n, d, o, m0_low; nb=40)

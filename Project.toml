@@ -4,12 +4,11 @@ authors = ["mloubout <mathias.louboutin@gmail.com>"]
 version = "0.2.3"
 
 [deps]
-DSP = "717857b8-e6f2-59f4-9121-6e50c889abd2"
 JUDI = "f3b833dc-6b2e-5b9c-b940-873ed6319979"
-PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
-JUDI = "2.6.0"
+JUDI = "3"
+julia = "1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

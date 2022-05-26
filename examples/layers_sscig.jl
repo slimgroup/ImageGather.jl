@@ -3,7 +3,7 @@
 #
 
 using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather
-import ImageGather: cig_sso
+
 # Set up model structure
 n = (301, 151)   # (x,y,z) or (x,z)
 d = (10., 10.)
@@ -19,7 +19,7 @@ m = (1f0 ./ v).^2
 m0 = (1f0 ./ v0).^2
 
 # Setup info and model structure
-nsrc = 31	# number of sources
+nsrc = 2	# number of sources
 model = Model(n, d, o, m; nb=40)
 model0 = Model(n, d, o, m0; nb=40)
 
@@ -53,7 +53,7 @@ q = diff(judiVector(srcGeometry, wavelet))
 opt = Options(space_order=12, isic=true)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
-J0 = J = judiJacobian(F(model0), q)
+J0 = judiJacobian(F(model0), q)
 # Nonlinear modeling
 dD = J0*dm
 
@@ -61,4 +61,5 @@ dD = J0*dm
 offsets = -300f0:model.d[1]:300f0
 J = judiExtendedJacobian(F(model0), q, offsets)
 
-Jcig = J'*dD
+ssodm = J'*dD
+dDe = J*ssodm
