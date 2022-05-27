@@ -19,7 +19,7 @@ m = (1f0 ./ v).^2
 m0 = (1f0 ./ v0).^2
 
 # Setup info and model structure
-nsrc = 2	# number of sources
+nsrc = 1	# number of sources
 model = Model(n, d, o, m; nb=40)
 model0 = Model(n, d, o, m0; nb=40)
 
@@ -38,9 +38,9 @@ dtD = 4f0    # receiver sampling interval [ms]
 # Set up receiver structure
 recGeometry = Geometry(xrec, yrec, zrec; dt=dtD, t=timeD, nsrc=nsrc)
 # Set up source geometry (cell array with source locations for each shot)
-xsrc = convertToCell(range(0f0, stop=(n[1] -1)*d[1], length=nsrc))
-ysrc = convertToCell(range(0f0, stop=0f0, length=nsrc))
-zsrc = convertToCell(range(20f0, stop=20f0, length=nsrc))
+xsrc = 1500f0
+ysrc = 0f0
+zsrc = 20f0
 
 # Set up source structure
 srcGeometry = Geometry(xsrc, ysrc, zsrc; dt=dtD, t=timeD)
@@ -50,7 +50,7 @@ wavelet = ricker_wavelet(timeD, dtD, f0)
 q = diff(judiVector(srcGeometry, wavelet))
 
 ###################################################################################################
-opt = Options(space_order=12, isic=false)
+opt = Options(space_order=12, isic=false, sum_padding=true)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 J0 = judiJacobian(F(model0), q)
@@ -58,8 +58,12 @@ J0 = judiJacobian(F(model0), q)
 dD = J0*dm
 
 # Common surface offset image gather
-offsets = -300f0:model.d[1]:300f0
+offsets = -100f0:model.d[1]:100f0
 J = judiExtendedJacobian(F(model0), q, offsets)
 
 ssodm = J'*dD
-dDe = J*ssodm
+
+ssor = randn(Float32, size(ssodm)...);
+dDe = J*ssor
+
+dot(dD, dDe), dot(ssodm[:], ssor[:])
