@@ -110,8 +110,8 @@ def ext_src(model, u, dm_ext, oh, isic=False):
 
     # extended source
     x = u.indices[1]
-    uh = u._subs(x, x+oh)
-    ql = -model.irho * uh.dt2 * dm._subs(x, x-oh)
+    uh = u._subs(x, x-oh)
+    ql = -model.irho * (uh.dt2 * dm)._subs(x, x-oh)
     return ql
 
 

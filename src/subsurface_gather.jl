@@ -60,7 +60,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
 
     # Devito interface
     dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dmd, J.offsets, isic=J.options.isic)
+                            dmd, J.offsets, isic=J.options.isic, space_order=J.options.space_order)
     dD = time_resample(dD, dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
@@ -86,8 +86,8 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
 
     # Devito
     g = pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved,
-               J.offsets, isic=J.options.isic)
-    g = remove_padding_cig(g, modelPy.padsizes)
+               J.offsets, isic=J.options.isic, space_order=J.options.space_order)
+    g = remove_padding_cig(g, modelPy.padsizes; true_adjoint=J.options.sum_padding)
     return g
 end
 

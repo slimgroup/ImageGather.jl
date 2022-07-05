@@ -49,28 +49,28 @@ wavelet = ricker_wavelet(timeD, dtD, f0)
 q = diff(judiVector(srcGeometry, wavelet))
 
 ###################################################################################################
-opt = Options(space_order=12, isic=false, sum_padding=false)
+opt = Options(space_order=12, isic=false, sum_padding=true)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 J0 = judiJacobian(F(model0), q)
 # Nonlinear modeling
 dD = J0*dm
+rtm = J0'*dD
 
 # Common surface offset image gather
-# offsets = -10f0:model.d[1]:10f0
-offsets = [0f0]
+offsets = -40f0:model.d[1]:40f0
+# offsets = [0f0]
 J = judiExtendedJacobian(F(model0), q, offsets)
 
 ssodm = J'*dD
 
-for test=1:1
-    ssor = zeros(Float32, size(ssodm)...)
-    for h=1:size(ssor, 1)
-        ssor[h, :, :] .= dm.data
-    end
-
-    dDe = J*ssor
-    @show norm(dDe - dD), norm(ssor[:] - dm[:])
-    a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
-    @printf(" <F x, y> : %2.5e, <x, F' y> : %2.5e, rel-error : %2.5e, ratio : %2.5e \n", a, b, (a - b)/(a + b), a/b)
+ssor = zeros(Float32, size(ssodm)...)
+for h=1:size(ssor, 1)
+    ssor[h, :, :] .= dm.data
 end
+
+dDe = J*ssor
+# @show norm(dDe - dD), norm(ssor[:] - dm[:])
+a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
+@printf(" <F x, y> : %2.5e, <x, F' y> : %2.5e, rel-error : %2.5e, ratio : %2.5e \n", a, b, (a - b)/(a + b), a/b)
+
