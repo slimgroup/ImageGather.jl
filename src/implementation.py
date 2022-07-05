@@ -1,12 +1,13 @@
-from devito import Inc, Operator, Function, CustomDimension
+from devito import Inc, Operator, Function, CustomDimension, norm
+from devito.finite_differences.differentiable import Add
 from devito.builtins import initialize_function
 
 import numpy as np
 
 from propagators import forward, gradient
-from geom_utils import src_rec
+from geom_utils import src_rec, geom_expr
 from sensitivity import grad_expr, lin_src
-from wave_utils import wavefield
+from fields import wavefield
 from kernels import wave_kernel
 from utils import opt_op
 
@@ -39,9 +40,8 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
     pde = wave_kernel(model, v, fw=False)
 
     # Setup source and receiver
-    geom_expr, _, _ = src_rec(model, v, src_coords=rec_coords,
-                              wavelet=res, fw=False)
-
+    go_expr = geom_expr(model, v, src_coords=rec_coords,
+                       wavelet=res, fw=False)
     # Setup gradient wrt m with all offsets
     oh = make_offsets(offsets, model)
     x = u.indices[1]
@@ -49,20 +49,19 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
     # Subsurface offsets.
     gradm = Function(name="gradm", grid=model.grid, shape=(oh.shape[0], *u.shape[1:]),
                      dimensions=(oh.indices[0], *model.grid.dimensions), space_order=0)
-    g_expr = grad_expr(gradm, u._subs(x, x-oh), v._subs(x, x+oh),
-                       model, isic=isic)
+    g_expr = grad_expr(gradm, u._subs(x, x-oh), v._subs(x, x+oh), model, isic=isic)
 
     # Create operator and run
     subs = model.spacing_map
-    op = Operator(pde + geom_expr + g_expr,subs=subs, name="cig_sso", opt=opt_op(model))
+    op = Operator(pde + go_expr + g_expr,subs=subs, name="cig_sso", opt=opt_op(model))
     try:
         op.cfunction
     except:
-        op = Operator(pde + geom_expr + g_expr,subs=subs, name="cig_sso", opt='advanced')
+        op = Operator(pde + go_expr + g_expr,subs=subs, name="cig_sso", opt='advanced')
         op.cfunction
     # Get bounds from offsets
     xm, xM = -np.min(oh.data), u.shape[1] - np.max(oh.data)
-    op(x_m=xm, x_M=xM)
+    op(x_m=xm, x_M=xM, dt=model.critical_dt)
 
     # Output
     return gradm.data
@@ -82,23 +81,22 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False,
     # Set up PDE expression and rearrange
     pde = wave_kernel(model, u)
     qlin = ext_src(model, u, dm_ext, oh, isic=isic)
-    pdel = wave_kernel(model, ul) + [Inc(ul.forward, dt**2/(model.irho*model.m) * qlin)]
+    fact = 1 / (model.damp/dt + (model.m * model.irho)/dt**2)
+    pdel = wave_kernel(model, ul) + [Inc(ul.forward, fact * qlin)]
 
     # Setup source and receiver
-    geom_expr, _, _ = src_rec(model, u, rec_coords=None,
-                              src_coords=src_coords, wavelet=wavelet)
-    geom_exprl, _, rcvl = src_rec(model, ul, rec_coords=rec_coords, nt=nt)
-
+    go_expr = geom_expr(model, u, src_coords=src_coords, wavelet=wavelet)
+    go_exprl = geom_expr(model, ul, rec_coords=rec_coords, nt=nt)
+    _, rcvl = src_rec(model, ul, rec_coords=rec_coords, nt=nt)
     # Create operator and run
     subs = model.spacing_map
-    op = Operator(pde + geom_expr + pdel + geom_exprl,
+    op = Operator(pde + go_expr + pdel + go_exprl,
                   subs=subs, name="extborn", opt=opt_op(model))
     op.cfunction
 
     # Remove edge for offsets
     xm, xM = -np.min(oh.data), u.shape[1] - np.max(oh.data)
-    op(x_m=xm, x_M=xM)
-
+    op(x_m=xm, x_M=xM, dt=model.critical_dt, rcvul=rcvl)
     # Output
     return rcvl.data
 
@@ -108,12 +106,12 @@ def ext_src(model, u, dm_ext, oh, isic=False):
     dm = Function(name="gradm", grid=model.grid, shape=(oh.shape[0], *u.shape[1:]),
                   dimensions=(oh.indices[0], *model.grid.dimensions),
                   space_order=u.space_order)
-    initialize_function(dm, dm_ext,[(0, 0)] + model.padsizes)
+    initialize_function(dm, dm_ext,((0, 0), *model.padsizes))
 
     # extended source
     x = u.indices[1]
-    uh = u._subs(x, x-oh)
-    ql = -model.irho * uh.dt2 * dm._subs(x, x+oh)
+    uh = u._subs(x, x+oh)
+    ql = -model.irho * uh.dt2 * dm._subs(x, x-oh)
     return ql
 
 

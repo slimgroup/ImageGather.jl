@@ -42,7 +42,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
     srcGeometry = Geometry(srcGeometry)
 
     # Avoid useless propage without perturbation
-    if minimum(dm) == 0 && minimum(dm) == 0
+    if minimum(dm) == 0 && maximum(dm) == 0
         return judiVector(recGeometry, zeros(Float32, recGeometry.nt[1], length(recGeometry.xloc[1])))
     end
 
@@ -91,7 +91,7 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
     return g
 end
 
-function remove_padding_cig(gradient::AbstractArray{DT}, nb::Array{Tuple{Int64,Int64},1}; true_adjoint::Bool=false) where {DT}
+function remove_padding_cig(gradient::AbstractArray{DT}, nb::NTuple{Nd, NTuple{2, Int64}}; true_adjoint::Bool=false) where {DT, Nd}
     N = size(gradient)[2:end]
     if true_adjoint
         for (dim, (nbl, nbr)) in enumerate(nb)
