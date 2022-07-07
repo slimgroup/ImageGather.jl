@@ -84,7 +84,7 @@ end
     offset_map(rtm, rtmo; scale=0)
 
 Return the regularized least-square division of rtm and rtmo. The regularization consists of the envelope and moving average
-followed by the least-square division ['surface_gather'](@ref)
+followed by the least-square division [`surface_gather`](@ref)
 """
 function offset_map(rtm::AbstractArray{T, 2}, rtmo::AbstractArray{T, 2}; scale=0) where T
     rtmn = mv_avg_2d(envelope(rtm))

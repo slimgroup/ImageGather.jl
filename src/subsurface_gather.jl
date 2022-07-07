@@ -8,7 +8,13 @@ struct judiExtendedJacobian{D, O, FT} <: judiAbstractJacobian{D, O, FT}
     offsets::Vector{D}
 end
 
+"""
+    J = judiExtendedJacobian(F, q, offsets; options::JUDIOptions)
 
+Extended jacobian (extended Born modeling operator) for subsurface horsizontal offsets `offsets`. Its adjoint
+comput the subsurface common offset volume. In succint way, the extened born modeling Operator can summarized in a linear algebra frmaework as:
+
+"""
 function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourceVector, offsets; options=nothing) where {D, O}
     JUDI.update!(F.options, options)
     offsets = Vector{D}(offsets)

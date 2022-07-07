@@ -1,4 +1,4 @@
-export surface_gather
+export surface_gather, double_rtm_cig
 
 """
     surface_gather(model, q, data; offsets=nothing, options=Options())
