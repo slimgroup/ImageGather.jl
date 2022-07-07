@@ -1,6 +1,8 @@
-using Documenter, ImageGather
+using Documenter, ImageGather, DocumenterCitations
 
-makedocs(sitename="Image gather tools",
+bib = CitationBibliography(joinpath(@__DIR__, "cig-refs.bib"), sorting = :nyt)
+
+makedocs(bib, sitename="Image gather tools",
          doctest=false, clean=true,
          authors="Mathias Louboutin",
          pages = Any["Home" => "index.md"])
