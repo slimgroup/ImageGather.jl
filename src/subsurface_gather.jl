@@ -6,6 +6,7 @@ struct judiExtendedJacobian{D, O, FT} <: judiAbstractJacobian{D, O, FT}
     F::FT
     q::judiMultiSourceVector
     offsets::Vector{D}
+    omni::Bool
 end
 
 """
@@ -15,14 +16,14 @@ Extended jacobian (extended Born modeling operator) for subsurface horsizontal o
 comput the subsurface common offset volume. In succint way, the extened born modeling Operator can summarized in a linear algebra frmaework as:
 
 """
-function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourceVector, offsets; options=nothing) where {D, O}
+function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourceVector, offsets; options=nothing, omni=false) where {D, O}
     JUDI.update!(F.options, options)
     offsets = Vector{D}(offsets)
-    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets)
+    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, omni)
 end
 
-adjoint(J::judiExtendedJacobian{D, O, FT}) where {D, O, FT} = judiExtendedJacobian{D, adjoint(O), FT}(J.n, J.m, J.F, J.q, J.offsets)
-getindex(J::judiExtendedJacobian{D, O, FT}, i) where {D, O, FT} = judiExtendedJacobian{D, O, FT}(J.m[i], J.n[i], J.F[i], J.q[i], J.offsets)
+adjoint(J::judiExtendedJacobian{D, O, FT}) where {D, O, FT} = judiExtendedJacobian{D, adjoint(O), FT}(J.n, J.m, J.F, J.q, J.offsets, J.omni)
+getindex(J::judiExtendedJacobian{D, O, FT}, i) where {D, O, FT} = judiExtendedJacobian{D, O, FT}(J.m[i], J.n[i], J.F[i], J.q[i], J.offsets, J.omni)
 
 function make_input(J::judiExtendedJacobian{D, :adjoint_born, FT}, q) where {D, FT}
     srcGeom, srcData = JUDI.make_src(J.q, J.F.qInjection)
@@ -66,7 +67,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
 
     # Devito interface
     dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dmd, J.offsets, isic=J.options.isic, space_order=J.options.space_order)
+                            dmd, J.offsets, isic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
     dD = time_resample(dD, dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
@@ -92,20 +93,22 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
 
     # Devito
     g = pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved,
-               J.offsets, isic=J.options.isic, space_order=J.options.space_order)
+               J.offsets, isic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
     g = remove_padding_cig(g, modelPy.padsizes; true_adjoint=J.options.sum_padding)
     return g
 end
 
 function remove_padding_cig(gradient::AbstractArray{DT}, nb::NTuple{Nd, NTuple{2, Int64}}; true_adjoint::Bool=false) where {DT, Nd}
-    N = size(gradient)[2:end]
+    no = ndims(gradient) - length(nb)
+    N = size(gradient)[no+1:end]
+    hd = tuple([Colon() for _=1:no]...)
     if true_adjoint
         for (dim, (nbl, nbr)) in enumerate(nb)
-            diml = dim+1
+            diml = dim+no
             selectdim(gradient, diml, nbl+1) .+= dropdims(sum(selectdim(gradient, diml, 1:nbl), dims=diml), dims=diml)
             selectdim(gradient, diml, N[dim]-nbr) .+= dropdims(sum(selectdim(gradient, diml, N[dim]-nbr+1:N[dim]), dims=diml), dims=diml)
         end
     end
-    out = gradient[:, [nbl+1:nn-nbr for ((nbl, nbr), nn) in zip(nb, N)]...]
+    out = gradient[hd..., [nbl+1:nn-nbr for ((nbl, nbr), nn) in zip(nb, N)]...]
     return out
 end

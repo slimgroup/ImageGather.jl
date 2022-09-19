@@ -15,12 +15,14 @@ function mv_avg_2d(x::AbstractArray{T, 2}; k=5) where T
     out
 end
 
+
 """
     envelope(x)
 
 Envelope of a vector or a 2D matrix. The envelope over the first dimension is taken for a 2D matrix (see DSP `hilbert`)
 """
 envelope(x::AbstractArray{T, 1}) where T = abs.(hilbert(x))
+
 
 """
     envelope(x)
@@ -38,6 +40,7 @@ Compute the binary mask where `ha` is within `tol` of `h`.
 """
 delta_h(ha::AbstractArray{T, 2}, h::Number, tol::Number) where T = Float32.(abs.(h .- ha) .<= tol)
 
+
 """
     mute!(shot, offsets;vp=1500, t0=1/10, dt=0.004)
 
@@ -51,6 +54,7 @@ function mute!(shot::AbstractArray{Ts, 2}, offsets::Vector{To}; vp=1500, t0=1/10
         shot[1:i, rx] .= 0f0
     end
 end
+
 
 """
     mute(shot, offsets;vp=1500, t0=1/10, dt=0.004)
@@ -79,6 +83,7 @@ function laplacian(image::AbstractArray{T, 2}; hx=1, hy=1) where T
     end
     return scale .* out
 end
+
 
 """
     offset_map(rtm, rtmo; scale=0)

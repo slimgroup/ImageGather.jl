@@ -1,6 +1,7 @@
 from devito import Inc, Operator, Function, CustomDimension, norm
 from devito.finite_differences.differentiable import Add
 from devito.builtins import initialize_function
+from devito.types.utils import DimensionTuple
 
 import numpy as np
 
@@ -28,11 +29,10 @@ def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, space_order=8
     return rtm.data, rtmo.data, illum.data
 
 
-def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, space_order=8):
+def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, space_order=8, omni=False):
     """
     """
-    _, u, _ = forward(model, src_coords, None, wavelet, space_order=space_order,
-                      save=True)
+    u = forward(model, src_coords, None, wavelet, space_order=space_order, save=True)[1]
     # Setting adjoint wavefieldgradient
     v = wavefield(model, space_order, fw=False)
 
@@ -43,13 +43,16 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
     go_expr = geom_expr(model, v, src_coords=rec_coords,
                        wavelet=res, fw=False)
     # Setup gradient wrt m with all offsets
-    oh = make_offsets(offsets, model)
+    ohs = make_offsets(offsets, model, omni)
     x = u.indices[1]
 
     # Subsurface offsets.
-    gradm = Function(name="gradm", grid=model.grid, shape=(oh.shape[0], *u.shape[1:]),
-                     dimensions=(oh.indices[0], *model.grid.dimensions), space_order=0)
-    g_expr = grad_expr(gradm, u._subs(x, x-oh), v._subs(x, x+oh), model, isic=isic)
+    hs = (h.shape[0] for h in ohs.values())
+    hd = (h.indices[0] for h in ohs.values())
+    gradm = Function(name="gradm", grid=model.grid, shape=(*hs, *u.shape[1:]),
+                     dimensions=(*hd, *model.grid.dimensions), space_order=0)
+    uh, vh = shifted_wf(u, v, ohs)
+    g_expr = grad_expr(gradm, uh, vh, model, ic=isic)
 
     # Create operator and run
     subs = model.spacing_map
@@ -60,19 +63,19 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
         op = Operator(pde + go_expr + g_expr,subs=subs, name="cig_sso", opt='advanced')
         op.cfunction
     # Get bounds from offsets
-    xm, xM = -np.min(oh.data), u.shape[1] - np.max(oh.data)
-    op(x_m=xm, x_M=xM, dt=model.critical_dt)
+    dim_kw = make_kw(ohs, DimensionTuple(*u.shape[1:], getters=model.grid.dimensions))
+    op(dt=model.critical_dt, **dim_kw)
 
     # Output
     return gradm.data
 
 
-def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False, space_order=8):
+def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False, space_order=8, omni=False):
     """
     """
     nt = wavelet.shape[0]
     dt = model.grid.time_dim.spacing
-    oh = make_offsets(offsets, model)
+    oh = make_offsets(offsets, model, omni)
 
     # Setting wavefield
     u = wavefield(model, space_order, nt=nt)
@@ -95,30 +98,60 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False,
     op.cfunction
 
     # Remove edge for offsets
-    xm, xM = -np.min(oh.data), u.shape[1] - np.max(oh.data)
-    op(x_m=xm, x_M=xM, dt=model.critical_dt, rcvul=rcvl)
+    dim_kw = make_kw(oh, DimensionTuple(*u.shape[1:], getters=model.grid.dimensions))
+    op(dt=model.critical_dt, rcvul=rcvl, **dim_kw)
     # Output
     return rcvl.data
 
 
 def ext_src(model, u, dm_ext, oh, isic=False):
     # Extended perturbation
-    dm = Function(name="gradm", grid=model.grid, shape=(oh.shape[0], *u.shape[1:]),
-                  dimensions=(oh.indices[0], *model.grid.dimensions),
+    hs = (h.shape[0] for h in oh.values())
+    hd = (h.indices[0] for h in oh.values())
+    dm = Function(name="gradm", grid=model.grid, shape=(*hs, *u.shape[1:]),
+                  dimensions=(*hd, *model.grid.dimensions),
                   space_order=u.space_order)
-    initialize_function(dm, dm_ext,((0, 0), *model.padsizes))
+    initialize_function(dm, dm_ext, (*((0, 0) for _ in oh.values()), *model.padsizes))
 
     # extended source
-    x = u.indices[1]
-    uh = u._subs(x, x-oh)
-    ql = -model.irho * (uh.dt2 * dm)._subs(x, x-oh)
+    uh = _shift(u, oh)
+    ql = -model.irho * _shift(uh.dt2 * dm, oh)
     return ql
 
 
-def make_offsets(offsets, model):
-    nh = offsets.shape[0]
-    offs = CustomDimension("hdim", 0, nh-1, nh)
-    oh = Function(name="hvals", grid=model.grid, space_order=0,
-                  dimensions=(offs,), shape=(nh,), dtype=np.int32)
-    oh.data[:] = offsets // model.grid.spacing[0]
-    return oh
+def make_offsets(offsets, model, omni):
+    dims = model.grid.dimensions
+    dims = dims if omni else (dims[0],)
+    ohs = dict()
+    for d in dims:
+        nh = offsets.shape[0]
+        offs = CustomDimension("off%s" % d.name, 0, nh-1, nh)
+        oh = Function(name="offv%s" % d.name, grid=model.grid, space_order=0,
+                      dimensions=(offs,), shape=(nh,), dtype=np.int32)
+        oh.data[:] = offsets // model.grid.spacing[0]
+        ohs[d] = oh
+    return ohs
+
+
+def shifted_wf(u, v, ohs):
+    uh = u
+    vh = v
+    for k, v in ohs.items():
+        uh = uh._subs(k, k-v)
+        vh = vh._subs(k, k+v)
+    return uh, vh
+
+
+def _shift(u, oh):
+    uh = u 
+    for k, v in oh.items():
+        uh = uh._subs(k, k-v)
+    return uh
+
+
+def make_kw(ohs, shape):
+    kw = dict()
+    for d, v in ohs.items():
+        kw['%s_m' % d.name] = -np.min(v.data)
+        kw['%s_M' % d.name] = shape[d] - np.max(v.data)
+    return kw

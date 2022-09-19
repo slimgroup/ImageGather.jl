@@ -2,7 +2,7 @@
 # Date: June 2021
 #
 
-using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather
+using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather, SlimPlotting
 
 # Set up model structure
 n = (601, 333)   # (x,y,z) or (x,z)
@@ -26,7 +26,7 @@ m0_high = (1f0 ./ v0_high).^2
 dm = vec(m - m0)
 
 # Setup info and model structure
-nsrc = 5	# number of sources
+nsrc = 51	# number of sources
 model = Model(n, d, o, m; nb=40)
 model0 = Model(n, d, o, m0; nb=40)
 model0_low = Model(n, d, o, m0_low; nb=40)
@@ -76,36 +76,21 @@ CIG_high = surface_gather(model0_high, q, dD; offsets=offsets, options=opt);
 cc = 1e-1
 figure(figsize=(20, 10))
 subplot(231)
-imshow(CIG[301, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
+plot_simage(CIG[301, :, :], d; cmap="Greys", new_fig=false)
 title("Good velocity (CDP=4.5km)")
 subplot(232)
-imshow(CIG_low[301, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
+plot_simage(CIG_low[301, :, :], d; cmap="Greys", new_fig=false)
 title("Low velocity (CDP=4.5km)")
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
 subplot(233)
-imshow(CIG_high[301, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
+plot_simage(CIG_high[301, :, :], d; cmap="Greys", new_fig=false)
 title("High velocity (CDP=4.5km)")
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
 
 subplot(234)
-imshow(CIG[101, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
-title("Good velocity (CDP=1.5km)")
+plot_simage(CIG[101, :, :], d; cmap="Greys", new_fig=false)
 subplot(235)
-imshow(CIG_low[101, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
-title("Low velocity (CDP=1.5km)")
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
+plot_simage(CIG_low[101, :, :], d; cmap="Greys", new_fig=false)
 subplot(236)
-imshow(CIG_high[101, :, :], vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
-title("High velocity (CDP=1.5km)")
-xlabel("Surface offset (km)")
-ylabel("depth (km)")
+plot_simage(CIG_high[101, :, :], d; cmap="Greys", new_fig=false)
 savefig("./docs/img/cig_cdp.png", bbox_inches="tight")
 
 
@@ -116,18 +101,15 @@ cig_rtm_high = hcat([CIG_high[i, :, 1:25] for i=1:20:n[1]]...)
 
 figure(figsize=(20, 10))
 subplot(131)
-imshow(cig_rtm_good, vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
+plot_simage(cig_rtm_good, d; cmap="Greys", new_fig=false)
 xticks([])
-ylabel("depth (km)")
 title("Good velocity")
 subplot(132)
-imshow(cig_rtm_low, vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
+plot_simage(cig_rtm_low, d; cmap="Greys", new_fig=false)
 xticks([])
-ylabel("depth (km)")
 title("Low velocity")
 subplot(133)
-imshow(cig_rtm_high, vmin=-cc, vmax=cc, cmap="Greys", aspect="auto", extent=[0, 8, 5, 0])
+plot_simage(cig_rtm_high, d; cmap="Greys", new_fig=false)
 xticks([])
-ylabel("depth (km)")
 title("High velocity")
 savefig("./docs/img/cig_line.png", bbox_inches="tight")
