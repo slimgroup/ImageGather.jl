@@ -1,3 +1,5 @@
+import JUDI: AbstractModel
+
 export surface_gather, double_rtm_cig
 
 """
@@ -13,7 +15,7 @@ Parameters
 * `offsets`: List of offsets to compute the gather at. Optional (defaults to 0:10*model.d:model.extent)
 * `options`: JUDI Options structure.
 """
-function surface_gather(model::Model, q::judiVector, data::judiVector; offsets=nothing, options=Options())
+function surface_gather(model::AbstractModel, q::judiVector, data::judiVector; offsets=nothing, options=Options())
     isnothing(offsets) && (offsets = 0f0:10*model.d[1]:(model.n[1]-1)*model.d[1])
     offsets = collect(offsets)
     pool = JUDI._worker_pool()
