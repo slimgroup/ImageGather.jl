@@ -34,7 +34,8 @@ end
 function make_input(J::judiExtendedJacobian{D, :born, FT}, dm) where {D<:Number, FT}
     srcGeom, srcData = JUDI.make_src(J.q, J.F.qInjection)
     return srcGeom, srcData, J.F.rInterpolation.data[1], nothing, dm
-end 
+end
+
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 3}) where {T, O} = J*vec(dm)
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 4}) where {T, O} = J*vec(dm)
 
@@ -59,7 +60,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
     dtComp = convert(Float32, modelPy."critical_dt")
 
     # Extrapolate input data to computational grid
-    qIn = time_resample(srcData, srcGeometry, dtComp)[1]
+    qIn = time_resample(srcData, srcGeometry, dtComp)
 
     # Set up coordinates
     src_coords = setup_grid(srcGeometry, J.model.n)  # shifts source coordinates by origin
@@ -67,7 +68,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
 
     # Devito interface
     dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dmd, J.offsets, isic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
+                            dmd, J.offsets, ic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
     dD = time_resample(dD, dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
@@ -84,16 +85,18 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
     dtComp = convert(Float32, modelPy."critical_dt")
 
     # Extrapolate input data to computational grid
-    qIn = time_resample(srcData, srcGeometry, dtComp)[1]
-    dObserved = time_resample(recData, recGeometry, dtComp)[1]
+    qIn = time_resample(srcData, srcGeometry, dtComp)
+    dObserved = time_resample(recData, recGeometry, dtComp)
 
     # Set up coordinates
     src_coords = setup_grid(srcGeometry, J.model.n)  # shifts source coordinates by origin
     rec_coords = setup_grid(recGeometry, J.model.n)  # shifts rec coordinates by origin
 
     # Devito
-    g = pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved,
-               J.offsets, isic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
+    g = JUDI.pylock() do 
+        pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved, J.offsets,
+               illum=false, ic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
+    end
     g = remove_padding_cig(g, modelPy.padsizes; true_adjoint=J.options.sum_padding)
     return g
 end

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    env:
+      DEVITO_ARCH: gcc-9
+      DEVITO_LANGUAGE: "openmp"
+      DEVITO_LOGGING: "ERROR"
+      OMP_NUM_THREADS: 1
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        version: ['1.6', '1.7', '1.8', '1']
+        os: [ubuntu-latest]
+
+    steps:
+      - name: Checkout ImageGather.jl
+        uses: actions/checkout@v3
+
+      - name: Setup julia
+        uses: julia-actions/setup-julia@v1
+        with:
+          version: ${{ matrix.version }}
+
+      - name: Build InvertibleNetworks.jl
+        uses: julia-actions/julia-buildpkg@latest
+
+      - name: Run tests
+        id: test
+        uses: julia-actions/julia-runtest@latest

@@ -5,9 +5,9 @@ version = "0.2.5"
 
 [deps]
 JUDI = "f3b833dc-6b2e-5b9c-b940-873ed6319979"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [compat]
-JUDI = "3.2.3"
 julia = "1"
 
 [extras]
