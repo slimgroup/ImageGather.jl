@@ -34,7 +34,7 @@ jobs:
         with:
           version: ${{ matrix.version }}
 
-      - name: Build InvertibleNetworks.jl
+      - name: Build ImageGather.jl
         uses: julia-actions/julia-buildpkg@latest
 
       - name: Run tests
