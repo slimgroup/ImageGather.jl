@@ -16,24 +16,20 @@ from utils import opt_op
 def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, space_order=8):
     """
     """
-    _, u, _ = forward(model, src_coords, None, wavelet, space_order=space_order,
-                      save=True)
-
-    # Illumination
-    illum = Function(name="I", grid=model.grid, space_order=0)
-    Operator(Inc(illum, u**2))()
+    _, u, illum, _ = forward(model, src_coords, None, wavelet, space_order=space_order,
+                             illum=True, save=True)
 
     # RTMs
-    rtm, _ = gradient(model, res, rec_coords, u, space_order=space_order)
-    rtmo, _ = gradient(model, res_o, rec_coords, u, space_order=space_order)
+    rtm = gradient(model, res, rec_coords, u, space_order=space_order)[0]
+    rtmo = gradient(model, res_o, rec_coords, u, space_order=space_order)[0]
     return rtm.data, rtmo.data, illum.data
 
 
-def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, space_order=8, omni=False):
+def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, ic="as", space_order=8, omni=False, illum=False):
     """
     """
     u = forward(model, src_coords, None, wavelet, space_order=space_order, save=True)[1]
-    # Setting adjoint wavefieldgradient
+    # Setting adjoint wavefield
     v = wavefield(model, space_order, fw=False)
 
     # Set up PDE expression and rearrange
@@ -41,27 +37,29 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
 
     # Setup source and receiver
     go_expr = geom_expr(model, v, src_coords=rec_coords,
-                       wavelet=res, fw=False)
+                        wavelet=res, fw=False)
     # Setup gradient wrt m with all offsets
     ohs = make_offsets(offsets, model, omni)
-    x = u.indices[1]
 
     # Subsurface offsets.
-    hs = (h.shape[0] for h in ohs.values())
-    hd = (h.indices[0] for h in ohs.values())
+    hs = tuple(h.shape[0] for h in ohs.values())
+    hd = tuple(h.indices[0] for h in ohs.values())
     gradm = Function(name="gradm", grid=model.grid, shape=(*hs, *u.shape[1:]),
-                     dimensions=(*hd, *model.grid.dimensions), space_order=0)
+                    dimensions=(*hd, *model.grid.dimensions))
+
     uh, vh = shifted_wf(u, v, ohs)
-    g_expr = grad_expr(gradm, uh, vh, model, ic=isic)
+    g_expr = grad_expr(gradm, uh, vh, model, ic=ic)
 
     # Create operator and run
-    subs = model.spacing_map
-    op = Operator(pde + go_expr + g_expr,subs=subs, name="cig_sso", opt=opt_op(model))
+    subs = model.grid.spacing_map
+    op = Operator(pde + go_expr + g_expr, subs=subs, name="cig_sso", opt=opt_op(model))
+
     try:
         op.cfunction
     except:
-        op = Operator(pde + go_expr + g_expr,subs=subs, name="cig_sso", opt='advanced')
+        op = Operator(pde + go_expr + g_expr, subs=subs, name="cig_sso", opt='advanced')
         op.cfunction
+
     # Get bounds from offsets
     dim_kw = make_kw(ohs, DimensionTuple(*u.shape[1:], getters=model.grid.dimensions))
     op(dt=model.critical_dt, **dim_kw)
@@ -70,7 +68,7 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, isic=False, s
     return gradm.data
 
 
-def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False, space_order=8, omni=False):
+def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, ic="as", space_order=8, omni=False):
     """
     """
     nt = wavelet.shape[0]
@@ -83,7 +81,7 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False,
 
     # Set up PDE expression and rearrange
     pde = wave_kernel(model, u)
-    qlin = ext_src(model, u, dm_ext, oh, isic=isic)
+    qlin = ext_src(model, u, dm_ext, oh, ic=ic)
     fact = 1 / (model.damp/dt + (model.m * model.irho)/dt**2)
     pdel = wave_kernel(model, ul) + [Inc(ul.forward, fact * qlin)]
 
@@ -92,7 +90,7 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False,
     go_exprl = geom_expr(model, ul, rec_coords=rec_coords, nt=nt)
     _, rcvl = src_rec(model, ul, rec_coords=rec_coords, nt=nt)
     # Create operator and run
-    subs = model.spacing_map
+    subs = model.grid.spacing_map
     op = Operator(pde + go_expr + pdel + go_exprl,
                   subs=subs, name="extborn", opt=opt_op(model))
     op.cfunction
@@ -104,7 +102,7 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, isic=False,
     return rcvl.data
 
 
-def ext_src(model, u, dm_ext, oh, isic=False):
+def ext_src(model, u, dm_ext, oh, ic="as"):
     # Extended perturbation
     hs = (h.shape[0] for h in oh.values())
     hd = (h.indices[0] for h in oh.values())
@@ -137,6 +135,8 @@ def shifted_wf(u, v, ohs):
     uh = u
     vh = v
     for k, v in ohs.items():
+        if v.shape[0] == 1:
+            continue
         uh = uh._subs(k, k-v)
         vh = vh._subs(k, k+v)
     return uh, vh
@@ -152,6 +152,6 @@ def _shift(u, oh):
 def make_kw(ohs, shape):
     kw = dict()
     for d, v in ohs.items():
-        kw['%s_m' % d.name] = -np.min(v.data)
-        kw['%s_M' % d.name] = shape[d] - np.max(v.data)
+        kw['%s_m' % d.name] = -np.min(v.data.view(np.ndarray))
+        kw['%s_M' % d.name] = shape[d] - np.max(v.data.view(np.ndarray))
     return kw

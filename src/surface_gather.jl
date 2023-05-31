@@ -74,8 +74,11 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     mute!(res, off_r .- scale; dt=dtComp/1f3, t0=.25)
     res_o = res .* off_r'
     # Double rtm
-    rtm, rtmo, illum = pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
-                              modelPy, qIn, src_coords, res, res_o, rec_coords, space_order=options.space_order)
+
+    rtm, rtmo, illum = JUDI.pylock() do
+        pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
+               modelPy, qIn, src_coords, res, res_o, rec_coords, space_order=options.space_order)
+    end
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)
     illum = remove_padding(illum, modelPy.padsizes)
