@@ -22,8 +22,10 @@ function surface_gather(model::AbstractModel, q::judiVector, data::judiVector; o
     # Distribute source
     arg_func = i -> (model, q[i], data[i], offsets, options[i])
     # Distribute source
-    results = JUDI.run_and_reduce(double_rtm_cig, pool, q.nsrc, arg_func)
-    return results
+    ncig = (model.n..., length(offsets))
+    out = PhysicalParameter(ncig, (model.d..., 1f0), (model.o..., minimum(offsets)), zeros(Float32, ncig...))
+    out = out + JUDI.run_and_reduce(double_rtm_cig, pool, q.nsrc, arg_func)
+    return out.data
 end
 
 """
@@ -91,11 +93,14 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     rtm = laplacian(rtm)
     rtm[illum .> 0] ./= illum[illum .> 0]
 
-    soffs = zeros(Float32, model.n..., length(offs))
+    soffs = zeros(Float32, size(model)..., length(offs))
 
     for (i, h) in enumerate(offs)
         soffs[:, :, i] .+= rtm .* delta_h(h_map, h, 2*diff(offs)[1])
     end
-
-    return soffs
+    
+    d = (spacing(model)..., 1f0)
+    n = size(soffs)
+    o = (origin(model)..., minimum(offs))
+    return PhysicalParameter(n, d, o, soffs)
 end
