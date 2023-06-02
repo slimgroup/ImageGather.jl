@@ -49,7 +49,7 @@ wavelet = ricker_wavelet(timeD, dtD, f0)
 q = diff(judiVector(srcGeometry, wavelet))
 
 ###################################################################################################
-opt = Options(space_order=12, isic=false, sum_padding=true)
+opt = Options(space_order=4, isic=false, sum_padding=true)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 J0 = judiJacobian(F(model0), q)

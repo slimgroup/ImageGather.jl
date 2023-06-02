@@ -96,8 +96,10 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets, ic="as", sp
     op.cfunction
 
     # Remove edge for offsets
-    dim_kw = make_kw(oh, DimensionTuple(*u.shape[1:], getters=model.grid.dimensions))
+    dim_kw = make_kw(oh, DimensionTuple(*u.shape[1:], getters=model.grid.dimensions),
+                     born=True)
     op(dt=model.critical_dt, rcvul=rcvl, **dim_kw)
+
     # Output
     return rcvl.data
 
@@ -149,9 +151,10 @@ def _shift(u, oh):
     return uh
 
 
-def make_kw(ohs, shape):
+def make_kw(ohs, shape, born=False):
     kw = dict()
+    scale = 2 if born else 1
     for d, v in ohs.items():
-        kw['%s_m' % d.name] = -np.min(v.data.view(np.ndarray))
-        kw['%s_M' % d.name] = shape[d] - np.max(v.data.view(np.ndarray))
+        kw['%s_m' % d.name] = -scale*np.min(v.data.view(np.ndarray))
+        kw['%s_M' % d.name] = shape[d] - scale*np.max(v.data.view(np.ndarray))
     return kw
