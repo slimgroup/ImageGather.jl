@@ -15,8 +15,8 @@ for i=1:12
     v[:,25*i+1:end] .= 1.5f0 + i*.25f0
 end
 v0 = imfilter(v, Kernel.gaussian(5))
-v0_low = .95f0 .* imfilter(v, Kernel.gaussian(45))
-v0_high = 1.05f0 .* imfilter(v, Kernel.gaussian(45))
+v0_low = .95f0 .* imfilter(v, Kernel.gaussian(5))
+v0_high = 1.05f0 .* imfilter(v, Kernel.gaussian(5))
 
 # Slowness squared [s^2/km^2]
 m = (1f0 ./ v).^2

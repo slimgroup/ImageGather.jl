@@ -45,7 +45,7 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, ic="as", spac
     hs = tuple(h.shape[0] for h in ohs.values())
     hd = tuple(h.indices[0] for h in ohs.values())
     gradm = Function(name="gradm", grid=model.grid, shape=(*hs, *u.shape[1:]),
-                    dimensions=(*hd, *model.grid.dimensions))
+                     dimensions=(*hd, *model.grid.dimensions))
 
     uh, vh = shifted_wf(u, v, ohs)
     g_expr = grad_expr(gradm, uh, vh, model, ic=ic)

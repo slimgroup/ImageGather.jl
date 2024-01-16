@@ -1,4 +1,4 @@
-import JUDI: AbstractModel
+import JUDI: AbstractModel, rlock_pycall, devito
 
 export surface_gather, double_rtm_cig
 
@@ -42,6 +42,8 @@ Compute the single shot contribution to the surface offset gather via double rtm
 
 """
 function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, options)
+    GC.gc(true)
+    devito.clear_cache()
     # Load full geometry for out-of-core geometry containers
     data.geometry = Geometry(data.geometry)
     q.geometry = Geometry(q.geometry)
@@ -56,11 +58,11 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
 
     # Set up Python model
     modelPy = devito_model(model, options)
-    dtComp = get_dt(model; dt=options.dt_comp)
+    dtComp = convert(Float32, modelPy."critical_dt")
 
     # Extrapolate input data to computational grid
-    qIn = time_resample(make_input(q), q.geometry, dtComp)[1]
-    res = time_resample(make_input(data), data.geometry, dtComp)[1]
+    qIn = time_resample(make_input(q), q.geometry, dtComp)
+    res = time_resample(make_input(data), data.geometry, dtComp)
 
     # Set up coordinates
     src_coords = setup_grid(q.geometry, model.n)  # shifts source coordinates by origin
@@ -75,10 +77,10 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     res_o = res .* off_r'
     # Double rtm
 
-    rtm, rtmo, illum = JUDI.pylock() do
-        pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
-               modelPy, qIn, src_coords, res, res_o, rec_coords, space_order=options.space_order)
-    end
+    rtm, rtmo, illum = rlock_pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
+                                    modelPy, qIn, src_coords, res, res_o, rec_coords,
+                                    space_order=options.space_order)
+
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)
     illum = remove_padding(illum, modelPy.padsizes)
@@ -94,6 +96,6 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     for (i, h) in enumerate(offs)
         soffs[:, :, i] .+= rtm .* delta_h(h_map, h, 2*diff(offs)[1])
     end
-    GC.gc()
+
     return soffs
 end
