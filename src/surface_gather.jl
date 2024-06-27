@@ -71,8 +71,9 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     rec_coords = setup_grid(data.geometry, model.n)    # shifts rec coordinates by origin
 
     # Src-rec offsets
-    scale = 5f3
-    off_r = abs.(data.geometry.xloc[1] .- q.geometry.xloc[1]) .+ scale
+    scale = 1f1
+    off_r = log.(abs.(data.geometry.xloc[1] .- q.geometry.xloc[1]) .+ scale)
+    inv_off(x) = exp.(x) .- scale
 
     # mute
     if mute
@@ -83,14 +84,14 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
 
     rtm, rtmo, illum = rlock_pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
                                     modelPy, qIn, src_coords, res, res_o, rec_coords,
-                                    ic=options.ic)
+                                    ic=options.IC)
 
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)
     illum = remove_padding(illum, modelPy.padsizes)
 
     # offset map
-    h_map = offset_map(rtm, rtmo; scale=scale)
+    h_map = inv_off(offset_map(rtm, rtmo))
 
     rtm = laplacian(rtm)
     rtm[illum .> 0] ./= illum[illum .> 0]
