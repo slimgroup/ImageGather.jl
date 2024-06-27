@@ -15,12 +15,12 @@ Parameters
 * `offsets`: List of offsets to compute the gather at. Optional (defaults to 0:10*model.d:model.extent)
 * `options`: JUDI Options structure.
 """
-function surface_gather(model::AbstractModel, q::judiVector, data::judiVector; offsets=nothing, options=Options())
+function surface_gather(model::AbstractModel, q::judiVector, data::judiVector; offsets=nothing, mute=true, options=Options())
     isnothing(offsets) && (offsets = 0f0:10*model.d[1]:(model.n[1]-1)*model.d[1])
     offsets = collect(offsets)
     pool = JUDI._worker_pool()
     # Distribute source
-    arg_func = i -> (model, q[i], data[i], offsets, options[i])
+    arg_func = i -> (model, q[i], data[i], offsets, options[i], mute)
     # Distribute source
     ncig = (model.n..., length(offsets))
     out = PhysicalParameter(ncig, (model.d..., 1f0), (model.o..., minimum(offsets)), zeros(Float32, ncig...))
@@ -43,7 +43,7 @@ Compute the single shot contribution to the surface offset gather via double rtm
 8. Return ``\\mathcal{I}``.
 
 """
-function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, options)
+function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, options, mute)
     GC.gc(true)
     devito.clear_cache()
     # Load full geometry for out-of-core geometry containers
@@ -70,18 +70,20 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     src_coords = setup_grid(q.geometry, model.n)  # shifts source coordinates by origin
     rec_coords = setup_grid(data.geometry, model.n)    # shifts rec coordinates by origin
 
-    # Src-rec offsets
+    # Src-rec offsets
     scale = 5f3
     off_r = abs.(data.geometry.xloc[1] .- q.geometry.xloc[1]) .+ scale
 
     # mute
-    mute!(res, off_r .- scale; dt=dtComp/1f3, t0=.25)
+    if mute
+        mute!(res, off_r .- scale; dt=dtComp/1f3, t0=.25)
+    end
     res_o = res .* off_r'
     # Double rtm
 
     rtm, rtmo, illum = rlock_pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
                                     modelPy, qIn, src_coords, res, res_o, rec_coords,
-                                    space_order=options.space_order)
+                                    ic=options.ic)
 
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)

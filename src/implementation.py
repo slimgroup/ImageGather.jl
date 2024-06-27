@@ -13,15 +13,14 @@ from kernels import wave_kernel
 from utils import opt_op
 
 
-def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, space_order=8):
+def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, ic="as"):
     """
     """
-    _, u, illum, _ = forward(model, src_coords, None, wavelet, space_order=space_order,
-                             illum=True, save=True)
+    _, u, illum, _ = forward(model, src_coords, None, wavelet, illum=True, save=True, t_sub=4)
 
     # RTMs
-    rtm = gradient(model, res, rec_coords, u, space_order=space_order)[0]
-    rtmo = gradient(model, res_o, rec_coords, u, space_order=space_order)[0]
+    rtm = gradient(model, res, rec_coords, u, ic=ic)[0]
+    rtmo = gradient(model, res_o, rec_coords, u, ic=ic)[0]
     return rtm.data, rtmo.data, illum.data
 
 
