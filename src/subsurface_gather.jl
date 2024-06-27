@@ -43,7 +43,7 @@ JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, q::Vector{D}) wher
 
 ############################################################
 
-function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) where {T, O}
+function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}, illum::Bool) where {T, O}
     srcGeometry, srcData, recGeometry, _, dm = make_input(J, q)
     # Load full geometry for out-of-core geometry containers
     recGeometry = Geometry(recGeometry)
@@ -74,7 +74,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}) wh
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
 end
 
-function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArray{T}) where {T, O}
+function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArray{T}, illum::Bool) where {T, O}
     srcGeometry, srcData, recGeometry, recData, _ = make_input(J, q)
     # Load full geometry for out-of-core geometry containers
     recGeometry = Geometry(recGeometry)

@@ -62,11 +62,12 @@ nh = length(offsets)
 J = judiExtendedJacobian(F(model0), q, offsets)
 
 ssodm = J'*dD
-@test size(ssodm, 3) == nh
+@show size(ssodm)
+@test size(ssodm, 1) == nh
 
 ssor = zeros(Float32, size(ssodm)...)
-for h=1:size(ssor, 3)
-    ssor[:, :, h] .= dm.data
+for h=1:size(ssor, 1)
+    ssor[h, :, :] .= dm.data
 end
 
 dDe = J*ssor
@@ -76,4 +77,4 @@ a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
 @test (a-b)/(a+b) ≈ 0 atol=sqrt(eps(1f0)) rtol=0
 
 # Make sure zero offset is the rtm, remove the sumpadding
-@test norm(rtm.data - ssodm[:, :, div(nh, 2)+1])/norm(rtm) ≈ 0f0 atol=1f-5 rtol=0
+@test norm(rtm.data - ssodm[div(nh, 2)+1, :, :])/norm(rtm) ≈ 0f0 atol=1f-5 rtol=0

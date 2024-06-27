@@ -2,7 +2,7 @@
 # Date: June 2021
 #
 
-using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather
+using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather, SlimPlotting
 
 # Set up model structure
 n = (601, 333)   # (x,y,z) or (x,z)
@@ -54,7 +54,7 @@ wavelet = ricker_wavelet(timeS, dtS, f0)
 q = judiVector(srcGeometry, wavelet)
 
 ###################################################################################################
-opt = Options(space_order=16)
+opt = Options(space_order=16, IC="as")
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 F0 = judiModeling(model0, srcGeometry, recGeometry; options=opt)
@@ -70,15 +70,17 @@ res = deepcopy(dD)
 mute!(res.data[1], offs)
 reso = deepcopy(res)
 
-rtm = J'*res
+I = inv(judiIllumination(J))
+
+rtm = I*J'*res
 
 omap = Array{Any}(undef, 2)
 i = 1
 
 # try a bunch of weighting functions
-for (wf, iwf) = zip([x-> x./4000f0 .+ 1, x-> log.(x .+ 10)], [x -> 4000f0.*(x .- 1), x-> exp.(x) .- 10])
+for (wf, iwf) = zip([x-> x .+ 5f3, x-> log.(x .+ 10)], [x -> x .- 5f3, x-> exp.(x) .- 10])
     reso.data[1] .= res.data[1] .* wf(offs)'
-    rtmo = J'*reso
+    rtmo = I*J'*reso
     omap[i] = iwf(offset_map(rtm.data, rtmo.data))
     global i+=1
 end
@@ -86,7 +88,8 @@ end
 figure()
 for (i, name)=enumerate(["shift", "log"])
     subplot(1,2,i)
-    imshow(omap[i]', vmin=0, vmax=4000, cmap="gist_ncar", aspect="auto")
+    plot_velocity(omap[i]', (1,1); cmap="jet", aspect="auto", perc=98, new_fig=false, vmax=5000)
     colorbar()
     title(name)
 end
+tight_layout()
