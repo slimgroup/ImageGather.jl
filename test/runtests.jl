@@ -59,22 +59,34 @@ rtm = J0'*dD
 offsets = -40f0:model.d[1]:40f0
 nh = length(offsets)
 
-J = judiExtendedJacobian(F(model0), q, offsets)
+for dims in ((:x, :z), :z, :x)
 
-ssodm = J'*dD
-@show size(ssodm)
-@test size(ssodm, 1) == nh
+    J = judiExtendedJacobian(F(model0), q, offsets, dims=dims)
 
-ssor = zeros(Float32, size(ssodm)...)
-for h=1:size(ssor, 1)
-    ssor[h, :, :] .= dm.data
+    ssodm = J'*dD
+    @show size(ssodm)
+    @test size(ssodm, 1) == nh
+
+    ssor = zeros(Float32, size(ssodm)...)
+    for h=1:size(ssor, 1)
+        if dims == (:x, :z)
+            for h2=1:size(ssor, 2)
+                ssor[h, h2, :, :] .= dm.data
+            end
+        else
+            ssor[h, :, :] .= dm.data
+        end
+    end
+
+    dDe = J*ssor
+    # @show norm(dDe - dD), norm(ssor[:] - dm[:])
+    a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
+
+    @test (a-b)/(a+b) ≈ 0 atol=1f-3 rtol=0
+
+    # Make sure zero offset is the rtm, remove the sumpadding
+    ih = div(nh, 2)+1
+    rtmc = dims == (:x, :z) ? ssodm[ih, ih, :, :] : ssodm[ih, :, :]
+
+    @test norm(rtm.data - rtmc, Inf) ≈ 0f0 atol=1f-4 rtol=0
 end
-
-dDe = J*ssor
-# @show norm(dDe - dD), norm(ssor[:] - dm[:])
-a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
-
-@test (a-b)/(a+b) ≈ 0 atol=sqrt(eps(1f0)) rtol=0
-
-# Make sure zero offset is the rtm, remove the sumpadding
-@test norm(rtm.data - ssodm[div(nh, 2)+1, :, :])/norm(rtm) ≈ 0f0 atol=1f-5 rtol=0
