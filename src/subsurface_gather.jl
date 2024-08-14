@@ -6,24 +6,48 @@ struct judiExtendedJacobian{D, O, FT} <: judiAbstractJacobian{D, O, FT}
     F::FT
     q::judiMultiSourceVector
     offsets::Vector{D}
-    omni::Bool
+    dims::Vector{Symbol}
 end
 
 """
-    J = judiExtendedJacobian(F, q, offsets; options::JUDIOptions)
+    J = judiExtendedJacobian(F, q, offsets; options::JUDIOptions, omni=false, dims=nothing)
 
 Extended jacobian (extended Born modeling operator) for subsurface horsizontal offsets `offsets`. Its adjoint
 comput the subsurface common offset volume. In succint way, the extened born modeling Operator can summarized in a linear algebra frmaework as:
 
+Options structure for seismic modeling.
+
+`omni`: If `true`, the extended jacobian will be computed for all dimensions.
+`dims`: If `omni` is `false`, the extended jacobian will be computed for the dimension(s) specified in `dims`.
+
 """
-function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourceVector, offsets; options=nothing, omni=false) where {D, O}
+function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourceVector, offsets;
+                              options=nothing, omni=false, dims=nothing) where {D, O}
     JUDI.update!(F.options, options)
     offsets = Vector{D}(offsets)
-    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, omni)
+    ndim = length(F.model.n)
+    if omni
+        dims = [:x, :y, :z][1:ndim]
+    else
+        if isnothing(dims)
+            dims = [:x]
+        else
+            dims = symvec(dims)
+            if ndim == 2
+                dims[dims .== :z] .= :y
+            end
+        end
+    end
+
+    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, dims)
 end
 
-adjoint(J::judiExtendedJacobian{D, O, FT}) where {D, O, FT} = judiExtendedJacobian{D, adjoint(O), FT}(J.n, J.m, J.F, J.q, J.offsets, J.omni)
-getindex(J::judiExtendedJacobian{D, O, FT}, i) where {D, O, FT} = judiExtendedJacobian{D, O, FT}(J.m[i], J.n[i], J.F[i], J.q[i], J.offsets, J.omni)
+symvec(s::Symbol) = [s]
+symvec(s::Tuple) = [symvec(ss)[1] for ss in s]::Vector{Symbol}
+symvec(s::Vector) = [symvec(ss)[1] for ss in s]::Vector{Symbol}
+
+adjoint(J::judiExtendedJacobian{D, O, FT}) where {D, O, FT} = judiExtendedJacobian{D, adjoint(O), FT}(J.n, J.m, J.F, J.q, J.offsets, J.dims)
+getindex(J::judiExtendedJacobian{D, O, FT}, i) where {D, O, FT} = judiExtendedJacobian{D, O, FT}(J.m[i], J.n[i], J.F[i], J.q[i], J.offsets, J.dims)
 
 function make_input(J::judiExtendedJacobian{D, :adjoint_born, FT}, q) where {D, FT}
     srcGeom, srcData = JUDI.make_src(J.q, J.F.qInjection)
@@ -56,7 +80,8 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}, il
 
     # Set up Python model structure
     modelPy = devito_model(J.model, J.options)
-    dmd = reshape(dm, length(J.offsets), J.model.n...)
+    nh = [length(J.offsets) for _=1:length(J.dims)]
+    dmd = reshape(dm, nh..., J.model.n...)
     dtComp = convert(Float32, modelPy."critical_dt")
 
     # Extrapolate input data to computational grid
@@ -68,7 +93,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}, il
 
     # Devito interface
     dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dmd, J.offsets, ic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
+                            dmd, J.offsets, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims)
     dD = time_resample(dD, dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
@@ -95,7 +120,7 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
     # Devito
     g = JUDI.pylock() do 
         pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved, J.offsets,
-               illum=false, ic=J.options.IC, space_order=J.options.space_order, omni=J.omni)
+               illum=false, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims)
     end
     g = remove_padding_cig(g, modelPy.padsizes; true_adjoint=J.options.sum_padding)
     return g

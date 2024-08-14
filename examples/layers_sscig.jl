@@ -61,8 +61,10 @@ rtm = J0'*dD
 offsets = -40f0:model.d[1]:40f0
 # offsets = [0f0]
 J = judiExtendedJacobian(F(model0), q, offsets)
+Jz = judiExtendedJacobian(F(model0), q, offsets, dims=:z)
 
 ssodm = J'*dD
+ssodmz = Jz'*dD
 
 ssor = zeros(Float32, size(ssodm)...)
 for h=1:size(ssor, 1)
@@ -70,7 +72,10 @@ for h=1:size(ssor, 1)
 end
 
 dDe = J*ssor
+dDez= Jz*ssor
 # @show norm(dDe - dD), norm(ssor[:] - dm[:])
 a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
 @printf(" <F x, y> : %2.5e, <x, F' y> : %2.5e, rel-error : %2.5e, ratio : %2.5e \n", a, b, (a - b)/(a + b), a/b)
 
+a, b = dot(dD, dDez), dot(ssodmz[:], ssor[:])
+@printf(" <F x, y> : %2.5e, <x, F' y> : %2.5e, rel-error : %2.5e, ratio : %2.5e \n", a, b, (a - b)/(a + b), a/b)
