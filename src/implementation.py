@@ -10,12 +10,17 @@ from fields import wavefield
 from kernels import wave_kernel
 from utils import opt_op
 
+try:
+    from devitopro import *  # noqa
+except ImportError:
+    pass
 
-def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, ic="as"):
+
+def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, ic="as", space_order=8):
     """
     """
     _, u, illum, _ = forward(model, src_coords, None, wavelet, illum=True,
-                             save=True, t_sub=4)
+                             save=True, t_sub=4, space_order=space_order)
 
     # RTMs
     rtm = gradient(model, res, rec_coords, u, ic=ic)[0]
@@ -24,12 +29,12 @@ def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, ic="as"):
 
 
 def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, ic="as",
-             space_order=8, dims=None, illum=False):
+             space_order=8, dims=None, illum=False, t_sub=1):
     """
     """
     so = max(space_order, np.max(np.abs(offsets)) // model.grid.spacing[0])
-    u = forward(model, src_coords, None, wavelet,
-                space_order=(space_order, so, so), save=True)[1]
+    _, u, _, _ = forward(model, src_coords, None, wavelet, t_sub=t_sub,
+                         illum=illum, space_order=(space_order, so, so), save=True)
     # Setting adjoint wavefield
     v = wavefield(model, space_order, fw=False, tfull=True)
 
