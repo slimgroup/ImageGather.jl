@@ -1,4 +1,4 @@
-import JUDI: AbstractModel, rlock_pycall, devito
+import JUDI: AbstractModel, devito, wrapcall_data
 
 export surface_gather, double_rtm_cig
 
@@ -60,7 +60,7 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
 
     # Set up Python model
     modelPy = devito_model(model, options)
-    dtComp = convert(Float32, modelPy."critical_dt")
+    dtComp = pyconvert(Float32, modelPy.critical_dt)
 
     # Extrapolate input data to computational grid
     qIn = time_resample(make_input(q), q.geometry, dtComp)
@@ -71,9 +71,8 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     rec_coords = setup_grid(data.geometry, model.n)    # shifts rec coordinates by origin
 
     # Src-rec offsets
-    scale = 1f1
-    off_r = log.(abs.(data.geometry.xloc[1] .- q.geometry.xloc[1]) .+ scale)
-    inv_off(x) = exp.(x) .- scale
+    scale = 5f3
+    off_r = abs.(data.geometry.xloc[1] .- q.geometry.xloc[1]) .+ scale
 
     # mute
     if mute
@@ -82,16 +81,15 @@ function double_rtm_cig(model_full, q::judiVector, data::judiVector, offs, optio
     res_o = res .* off_r'
     # Double rtm
 
-    rtm, rtmo, illum = rlock_pycall(impl."double_rtm", Tuple{PyArray, PyArray, PyArray},
-                                    modelPy, qIn, src_coords, res, res_o, rec_coords,
-                                    ic=options.IC)
+    rtm, rtmo, illum = wrapcall_data(impl."double_rtm", modelPy, qIn, src_coords, res, res_o, rec_coords,
+                                     ic=options.IC, space_order=options.space_order)
 
     rtm = remove_padding(rtm, modelPy.padsizes)
     rtmo = remove_padding(rtmo, modelPy.padsizes)
     illum = remove_padding(illum, modelPy.padsizes)
 
     # offset map
-    h_map = inv_off(offset_map(rtm, rtmo))
+    h_map = offset_map(rtm, rtmo; scale=scale)
 
     rtm = laplacian(rtm)
     rtm[illum .> 0] ./= illum[illum .> 0]

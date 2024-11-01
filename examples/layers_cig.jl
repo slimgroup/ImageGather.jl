@@ -61,7 +61,7 @@ wavelet = ricker_wavelet(timeS, dtS, f0)
 q = judiVector(srcGeometry, wavelet)
 
 ###################################################################################################
-opt = Options(space_order=16)
+opt = Options(space_order=8)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 # Nonlinear modeling

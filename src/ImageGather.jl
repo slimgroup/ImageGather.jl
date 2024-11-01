@@ -1,17 +1,20 @@
 module ImageGather
 
     using JUDI
-    using JUDI.DSP, JUDI.PyCall
+    using JUDI.DSP, JUDI.PythonCall
 
     import Base: getindex, *
     import JUDI: judiAbstractJacobian, judiMultiSourceVector, judiComposedPropagator, judiJacobian, make_input, propagate
     import JUDI.LinearAlgebra: adjoint
 
-    const impl = PyNULL()
+    const impl = PythonCall.pynew()
+
+    IGPath = pathof(ImageGather)
 
     function __init__()
-        pushfirst!(PyVector(pyimport("sys")."path"),dirname(pathof(ImageGather)))
-        copy!(impl, pyimport("implementation"))
+        pyimport("sys").path.append(dirname(IGPath))
+        PythonCall.pycopy!(impl, pyimport("implementation"))
+        set_devito_config("autopadding", false)
     end
     # Utility functions
     include("utils.jl")

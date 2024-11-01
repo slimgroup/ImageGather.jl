@@ -82,7 +82,7 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}, il
     modelPy = devito_model(J.model, J.options)
     nh = [length(J.offsets) for _=1:length(J.dims)]
     dmd = reshape(dm, nh..., J.model.n...)
-    dtComp = convert(Float32, modelPy."critical_dt")
+    dtComp = pyconvert(Float32, modelPy.critical_dt)
 
     # Extrapolate input data to computational grid
     qIn = time_resample(srcData, srcGeometry, dtComp)
@@ -92,9 +92,9 @@ function propagate(J::judiExtendedJacobian{T, :born, O}, q::AbstractArray{T}, il
     rec_coords = setup_grid(recGeometry, J.model.n)    # shifts rec coordinates by origin
 
     # Devito interface
-    dD = JUDI.wrapcall_data(impl."cig_lin", modelPy, src_coords, qIn, rec_coords,
-                            dmd, J.offsets, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims)
-    dD = time_resample(dD, dtComp, recGeometry)
+    dD = impl.cig_lin(modelPy, src_coords, qIn, rec_coords, dmd, J.offsets,
+                      ic=J.options.IC, space_order=J.options.space_order, dims=J.dims)
+    dD = time_resample(PyArray(dD), dtComp, recGeometry)
     # Output shot record as judiVector
     return judiVector{Float32, Matrix{Float32}}(1, recGeometry, [dD])
 end
@@ -107,7 +107,7 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
 
     # Set up Python model
     modelPy = devito_model(J.model, J.options)
-    dtComp = convert(Float32, modelPy."critical_dt")
+    dtComp = pyconvert(Float32, modelPy.critical_dt)
 
     # Extrapolate input data to computational grid
     qIn = time_resample(srcData, srcGeometry, dtComp)
@@ -118,11 +118,10 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
     rec_coords = setup_grid(recGeometry, J.model.n)  # shifts rec coordinates by origin
 
     # Devito
-    g = JUDI.pylock() do 
-        pycall(impl."cig_grad", PyArray, modelPy, src_coords, qIn, rec_coords, dObserved, J.offsets,
-               illum=false, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims)
-    end
-    g = remove_padding_cig(g, modelPy.padsizes; true_adjoint=J.options.sum_padding)
+    g = impl.cig_grad(modelPy, src_coords, qIn, rec_coords, dObserved, J.offsets,
+                      illum=false, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims,
+                      t_sub=J.options.subsampling_factor)
+    g = remove_padding_cig(PyArray(g), pyconvert(Tuple, modelPy.padsizes); true_adjoint=J.options.sum_padding)
     return g
 end
 
