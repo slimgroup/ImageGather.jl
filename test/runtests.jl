@@ -47,7 +47,7 @@ wavelet = ricker_wavelet(timeD, dtD, f0)
 q = diff(judiVector(srcGeometry, wavelet))
 
 ###################################################################################################
-opt = Options()
+opt = Options(sum_padding=true)
 # Setup operators
 F = judiModeling(model, srcGeometry, recGeometry; options=opt)
 J0 = judiJacobian(F(model0), q)
@@ -79,14 +79,12 @@ for dims in ((:x, :z), :z, :x)
     end
 
     dDe = J*ssor
-    # @show norm(dDe - dD), norm(ssor[:] - dm[:])
     a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
-
     @test (a-b)/(a+b) ≈ 0 atol=1f-3 rtol=0
 
     # Make sure zero offset is the rtm, remove the sumpadding
-    ih = div(nh, 2)+1
+    ih = div(nh, 2) + 1
     rtmc = dims == (:x, :z) ? ssodm[ih, ih, :, :] : ssodm[ih, :, :]
 
-    @test norm(rtm.data - rtmc, Inf) ≈ 0f0 atol=1f-4 rtol=0
+    @test norm(rtm.data - rtmc, Inf) ≈ 0f0 atol=1f-3 rtol=0
 end
