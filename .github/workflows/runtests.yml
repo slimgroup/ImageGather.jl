@@ -13,7 +13,7 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      DEVITO_ARCH: gcc-9
+      DEVITO_ARCH: gcc
       DEVITO_LANGUAGE: "openmp"
       DEVITO_LOGGING: "ERROR"
       OMP_NUM_THREADS: 1
@@ -22,15 +22,15 @@ jobs:
       fail-fast: false
 
       matrix:
-        version: ['1.6', '1.7', '1.8', '1.9', '1.10', '1']
+        version: ['1', 'lts', '1.11', '1.12']
         os: [ubuntu-latest]
 
     steps:
       - name: Checkout ImageGather.jl
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup julia
-        uses: julia-actions/setup-julia@v1
+        uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
 

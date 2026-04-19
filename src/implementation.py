@@ -1,5 +1,5 @@
 from devito import Inc, Operator, Function, CustomDimension
-from devito.builtins import initialize_function
+from devito.builtins.utils import pad_outhalo
 
 import numpy as np
 
@@ -16,7 +16,8 @@ except ImportError:
     pass
 
 
-def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords, ic="as", space_order=8):
+def double_rtm(model, wavelet, src_coords, res, res_o, rec_coords,
+               ic="as", space_order=8):
     """
     """
     _, u, illum, _ = forward(model, src_coords, None, wavelet, illum=True,
@@ -32,11 +33,15 @@ def cig_grad(model, src_coords, wavelet, rec_coords, res, offsets, ic="as",
              space_order=8, dims=None, illum=False, t_sub=1):
     """
     """
-    so = max(space_order, np.max(np.abs(offsets)) // model.grid.spacing[0])
+    max_offset = int(np.max(np.abs(offsets)) // model.grid.spacing[0])
+    if ic in ["isic", "fwi"]:
+        max_offset += space_order // 2
+    so = max(space_order, max_offset)
     _, u, _, _ = forward(model, src_coords, None, wavelet, t_sub=t_sub,
-                         illum=illum, space_order=(space_order, so, so), save=True)
+                         illum=illum, space_order=(space_order, so, so),
+                         save=True)
     # Setting adjoint wavefield
-    v = wavefield(model, space_order, fw=False, tfull=True)
+    v = wavefield(model, (space_order, so, so), fw=False, tfull=True)
 
     # Set up PDE expression and rearrange
     pde, extra = wave_kernel(model, v, fw=False)
@@ -114,9 +119,10 @@ def ext_src(model, u, dm_ext, oh, ul, ic="as"):
     dm = Function(name="gradm", grid=model.grid, shape=(*hs, *u.shape[1:]),
                   dimensions=(*hd, *model.grid.dimensions),
                   space_order=u.space_order)
-    initialize_function(dm, dm_ext, (*((0, 0) for _ in oh.values()),
-                                     *model.padsizes))
-
+    dm.data[:] = np.pad(dm_ext,
+                        (*((0, 0) for _ in oh.values()), *model.padsizes),
+                        mode='edge')
+    pad_outhalo(dm)
     # extended source
     uh = u
     for k, v in oh.items():
