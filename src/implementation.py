@@ -77,7 +77,7 @@ def cig_lin(model, src_coords, wavelet, rec_coords, dm_ext, offsets,
             ic="as", space_order=8, dims=None):
     """
     """
-    so = max(space_order, np.max(np.abs(offsets)) // model.grid.spacing[0])
+    so = int(max(space_order, np.max(np.abs(offsets)) // model.grid.spacing[0]))
     nt = wavelet.shape[0]
     dt = model.grid.time_dim.spacing
     oh = make_offsets(offsets, model, dims)

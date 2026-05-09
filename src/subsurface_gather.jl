@@ -9,6 +9,11 @@ struct judiExtendedJacobian{D, O, FT} <: judiAbstractJacobian{D, O, FT}
     dims::Vector{Symbol}
 end
 
+# Handle both 1D and 2D offset dimensions
+space_offset(N::NTuple{2,<:Integer}, nh::Integer) = AbstractSize((:h, :x, :z), (nh, N[1], N[2]))
+space_offset(N::NTuple{2,<:Integer}, nh::Integer, ndim::Integer) = ndim == 1 ? AbstractSize((:h, :x, :z), (nh, N[1], N[2])) : AbstractSize((:hx, :hz, :x, :z), (nh, nh, N[1], N[2]))
+
+
 """
     J = judiExtendedJacobian(F, q, offsets; options::JUDIOptions, omni=false, dims=nothing)
 
@@ -38,8 +43,9 @@ function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourc
             end
         end
     end
-
-    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, dims)
+    ndims_offset = length(dims)
+    #return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, dims)
+    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space_offset(F.model.n, length(offsets), ndims_offset), F, q, offsets, dims)
 end
 
 symvec(s::Symbol) = [s]
@@ -63,7 +69,9 @@ end
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 3}) where {T, O} = J*vec(dm)
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 4}) where {T, O} = J*vec(dm)
 
-JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, q::Vector{D}) where {D<:Number, FT} = q
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, q::AbstractVector{D}) where {D<:Number, FT} = q
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, dm::PhysicalParameter{D}) where {D<:Number, FT} = vec(dm)
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, dm::Base.ReshapedArray{D}) where {D<:Number, FT} = vec(collect(dm))
 
 ############################################################
 
@@ -122,8 +130,46 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
                       illum=false, ic=J.options.IC, space_order=J.options.space_order, dims=J.dims,
                       t_sub=J.options.subsampling_factor)
     g = remove_padding_cig(PyArray(g), pyconvert(Tuple, modelPy.padsizes); true_adjoint=J.options.sum_padding)
-    return g
+    #return g
+
+    nh = length(J.offsets)
+    oh = first(J.offsets)
+    dh = nh > 1 ? J.offsets[2] - J.offsets[1] : one(eltype(J.offsets))
+    dx, dz = J.model.d
+    ox, oz = J.model.o
+
+    ndims_offset = length(J.dims)  # 1 for :x or :z, 2 for (:x,:z)
+
+    if ndims_offset == 1
+        # g is (nh, nx, nz) → 3D PhysicalParameter
+        return PhysicalParameter(g, (dh, dx, dz), (oh, ox, oz))
+    else
+        # g is (nh, nh, nx, nz) → return as plain Array, PhysicalParameter only supports up to 3D
+        return g
+    end
 end
+
+# Adjoint: bypass _project_to_physical_domain, sum over all sources
+function JUDI.multi_src_propagate(J::judiExtendedJacobian{T, :adjoint_born, O},
+                                   q::judiMultiSourceVector) where {T, O}
+    result = propagate(J[1], q[1].data[1])
+    for i in 2:q.nsrc
+        result = result .+ propagate(J[i], q[i].data[1])
+    end
+    return result
+end
+
+# Forward: multi_src_propagate redirects
+function JUDI.multi_src_propagate(J::judiExtendedJacobian{T, :born, O},
+                                   dm::PhysicalParameter{T}) where {T, O}
+    return JUDI.multi_src_propagate(J, vec(dm))
+end
+
+function JUDI.multi_src_propagate(J::judiExtendedJacobian{T, :born, O},
+                                   dm::Base.ReshapedArray{T}) where {T, O}
+    return JUDI.multi_src_propagate(J, vec(collect(dm)))
+end
+
 
 function remove_padding_cig(gradient::AbstractArray{DT}, nb::NTuple{Nd, NTuple{2, Int64}}; true_adjoint::Bool=false) where {DT, Nd}
     no = ndims(gradient) - length(nb)
