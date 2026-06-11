@@ -9,6 +9,21 @@ struct judiExtendedJacobian{D, O, FT} <: judiAbstractJacobian{D, O, FT}
     dims::Vector{Symbol}
 end
 
+# Avoids PhysicalParameter issue with lsqr!
+import Base: similar
+
+function similar(x::Array{T,3}, ::Type{S}, n::AbstractSize) where {T,S}
+    return zeros(S, n[:h], n[:x], n[:z])
+end
+
+function similar(x::Array{T,4}, ::Type{S}, n::AbstractSize) where {T,S}
+    return zeros(S, n[:hx], n[:hz], n[:x], n[:z])
+end
+
+# Handle both 1D and 2D offset dimensions
+space_offset(N::NTuple{2,<:Integer}, nh::Integer, ndim::Integer) = ndim == 1 ? AbstractSize((:h, :x, :z), (nh, N[1], N[2])) : AbstractSize((:hx, :hz, :x, :z), (nh, nh, N[1], N[2]))
+
+
 """
     J = judiExtendedJacobian(F, q, offsets; options::JUDIOptions, omni=false, dims=nothing)
 
@@ -38,8 +53,8 @@ function judiExtendedJacobian(F::judiComposedPropagator{D, O}, q::judiMultiSourc
             end
         end
     end
-
-    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space(F.model.n), F, q, offsets, dims)
+    ndims_offset = length(dims)
+    return judiExtendedJacobian{D, :born, typeof(F)}(F.m, space_offset(F.model.n, length(offsets), ndims_offset), F, q, offsets, dims)
 end
 
 symvec(s::Symbol) = [s]
@@ -63,7 +78,9 @@ end
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 3}) where {T, O} = J*vec(dm)
 *(J::judiExtendedJacobian{T, :born, O}, dm::Array{T, 4}) where {T, O} = J*vec(dm)
 
-JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, q::Vector{D}) where {D<:Number, FT} = q
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, q::AbstractVector{D}) where {D<:Number, FT} = q
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, dm::PhysicalParameter{D}) where {D<:Number, FT} = vec(dm)
+JUDI.process_input_data(::judiExtendedJacobian{D, :born, FT}, dm::Base.ReshapedArray{D}) where {D<:Number, FT} = vec(collect(dm))
 
 ############################################################
 
@@ -124,6 +141,18 @@ function propagate(J::judiExtendedJacobian{T, :adjoint_born, O}, q::AbstractArra
     g = remove_padding_cig(PyArray(g), pyconvert(Tuple, modelPy.padsizes); true_adjoint=J.options.sum_padding)
     return g
 end
+
+# Forward: multi_src_propagate redirects
+function JUDI.multi_src_propagate(J::judiExtendedJacobian{T, :born, O},
+                                   dm::PhysicalParameter{T}) where {T, O}
+    return JUDI.multi_src_propagate(J, vec(dm))
+end
+
+function JUDI.multi_src_propagate(J::judiExtendedJacobian{T, :born, O},
+                                   dm::Base.ReshapedArray{T}) where {T, O}
+    return JUDI.multi_src_propagate(J, vec(collect(dm)))
+end
+
 
 function remove_padding_cig(gradient::AbstractArray{DT}, nb::NTuple{Nd, NTuple{2, Int64}}; true_adjoint::Bool=false) where {DT, Nd}
     no = ndims(gradient) - length(nb)
