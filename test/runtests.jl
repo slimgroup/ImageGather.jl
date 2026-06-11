@@ -82,6 +82,11 @@ for dims in ((:x, :z), :z, :x)
     a, b = dot(dD, dDe), dot(ssodm[:], ssor[:])
     @test (a-b)/(a+b) ≈ 0 atol=1f-3 rtol=0
 
+    # Perturbation passed as a PhysicalParameter must match the raw-array forward
+    pp = PhysicalParameter(ssor, ntuple(_->1f0, ndims(ssor)), ntuple(_->0f0, ndims(ssor)))
+    @test isapprox(J*pp, dDe; rtol=1f-5)
+
+
     # Make sure zero offset is the rtm, remove the sumpadding
     ih = div(nh, 2) + 1
     rtmc = dims == (:x, :z) ? ssodm[ih, ih, :, :] : ssodm[ih, :, :]
