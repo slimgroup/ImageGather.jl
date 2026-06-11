@@ -2,7 +2,7 @@
 # Date: June 2021
 #
 
-using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather, SlimPlotting
+using JUDI, LinearAlgebra, Images, PythonPlot, DSP, ImageGather, SlimPlotting
 
 # Set up model structure
 n = (601, 333)   # (x,y,z) or (x,z)

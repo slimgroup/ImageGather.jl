@@ -2,7 +2,7 @@
 # Date: June 2021
 #
 
-using JUDI, LinearAlgebra, Images, PyPlot, DSP, ImageGather, Printf
+using JUDI, LinearAlgebra, Images, PythonPlot, DSP, ImageGather, Printf
 
 # Set up model structure
 n = (301, 151)   # (x,y,z) or (x,z)
